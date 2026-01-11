@@ -1,0 +1,30 @@
+# --- Python environment ---
+# Ignore the virtual environment folder
+.venv/
+env/
+venv/
+ENV/
+
+# --- Python build and cache ---
+# Recursive pattern to ignore all __pycache__ folders
+**/__pycache__/
+# Compiled bytecode
+*.py[cod]
+# Optimized files
+*.pyo
+# Pyright cache
+.pyright_cache/
+
+# --- Visual Studio Code ---
+# Ignore local workspace settings
+.vscode/
+
+# --- Environment Variables (Security) ---
+# NEVER commit these files as they contain secrets
+.env
+.env.local
+
+# --- Database ---
+# Ignore local SQLite databases
+*.db
+*.sqlite3

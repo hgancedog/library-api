@@ -1,0 +1,12 @@
+annotated-doc==0.0.4
+black==25.11.0
+click==8.3.1
+colorama==0.4.6
+isort==7.0.0
+mypy_extensions==1.1.0
+packaging==25.0
+pathspec==0.12.1
+pipdeptree==2.30.0
+platformdirs==4.5.0
+pytokens==0.3.0
+typing-inspection==0.4.2
