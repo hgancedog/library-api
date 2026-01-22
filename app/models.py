@@ -5,23 +5,23 @@ from typing import Optional
 
 @dataclass
 class User:
-    id: int
     username: str
     email: str
+    id: int | None = None
 
 
 @dataclass
 class Book:
-    id: int
     title: str
     author: str
     is_available: bool = True
+    id: int | None = None
 
 
 @dataclass
 class Loan:
-    id: int
     user_id: int
     book_id: int
     loan_date: date
     return_date: Optional[date] = None
+    id: int | None = None
