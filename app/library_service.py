@@ -7,7 +7,7 @@ from app.exceptions import BookError, UserError, BookAlreadyLoanedError, LoanErr
 
 class LibraryService:
 
-    # ! TODO - ADD BOOK & ADD USER
+    # ! TODO - Documment methods
 
     def __init__(self, db: DbProtocol):
         self.db = db
@@ -34,19 +34,38 @@ class LibraryService:
 
         self.db.add_user(user)
 
-    def create_loan(self, user_id: int, book_id: int, loan_date: date) -> Loan | None:
-        if not self.db.get_user_by_id(user_id):
-            raise UserError(f"User with ID {user_id} does not exists")
-
-        book: Book | None = self.db.get_book_by_id(book_id)
+    def check_book(self, book_id: int) -> bool:
+        book = self.db.get_book_by_id(book_id)
 
         if not book:
             raise BookError(f"Book with ID {book_id} does not exists")
 
         if not book.is_available:
-            raise BookAlreadyLoanedError(
-                f"The book '{book.title}' is currently unavailable"
+            raise BookAlreadyLoanedError(f"The book '{book.title}' is not available")
+
+        loan = self.db.get_active_loan(book_id)
+
+        if loan:
+            user = self.db.get_user_by_id(loan.user_id)
+
+            if user:
+                username = user.username
+
+                raise LoanError(
+                    f"Book: {book.title} has been loaned by user {username}"
+                )
+
+            raise ValueError(
+                f"Inconsistency: There is no user associated with the active loan of '{book.title}'"
             )
+
+        return True
+
+    def create_loan(self, user_id: int, book_id: int, loan_date: date) -> Loan | None:
+        if not self.db.get_user_by_id(user_id):
+            raise UserError(f"User with ID {user_id} does not exists")
+
+        self.check_book(book_id)
 
         loan: Loan = Loan(user_id, book_id, loan_date)
 
