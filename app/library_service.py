@@ -6,13 +6,22 @@ from app.exceptions import BookError, UserError, BookAlreadyLoanedError, LoanErr
 
 
 class LibraryService:
-
-    # ! TODO - Documment methods
+    """
+    Orchestrates library business logic by connecting models with
+    the database persistence layer.
+    """
 
     def __init__(self, db: DbProtocol):
+        """Initializes the service with a specific database implementation."""
         self.db = db
 
     def register_book(self, book: Book) -> None:
+        """
+        Validates and adds a new book to the system.
+
+        Raises:
+            BookError: If the book lacks a valid title or author.
+        """
 
         if not book.author or not book.author.strip():
             raise BookError(f"Book must have an autor")
@@ -23,6 +32,12 @@ class LibraryService:
         self.db.add_book(book)
 
     def register_user(self, user: User) -> None:
+        """
+        Validates member data and registers them in the database.
+
+        Raises:
+            UserError: If the email format is invalid or username is too short.
+        """
 
         email_pattern = r"^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"
 
@@ -35,6 +50,18 @@ class LibraryService:
         self.db.add_user(user)
 
     def check_book(self, book_id: int) -> bool:
+        """
+        Performs deep validation on a book's availability and loan status.
+
+        Returns:
+            bool: True if the book is ready for a new loan.
+
+        Raises:
+            BookError: If the book doesn't exist.
+            BookAlreadyLoanedError: If the book is marked as unavailable.
+            LoanError: If there's a conflict with active loans.
+            ValueError: If data inconsistency is detected between book and user.
+        """
         book = self.db.get_book_by_id(book_id)
 
         if not book:
@@ -62,6 +89,13 @@ class LibraryService:
         return True
 
     def create_loan(self, user_id: int, book_id: int, loan_date: date) -> Loan | None:
+        """
+        High-level process to create a loan, including all safety checks.
+
+        Raises:
+            UserError: If the user ID is not registered.
+            BookError: If the book cannot be reserved in the database.
+        """
         if not self.db.get_user_by_id(user_id):
             raise UserError(f"User with ID {user_id} does not exists")
 
@@ -77,6 +111,13 @@ class LibraryService:
         return loan
 
     def mark_loan_as_returned(self, book_id: int, return_date: date) -> None:
+        """
+        Processes a return by closing the loan and releasing the book.
+
+        Raises:
+            LoanError: If no active loan is found for the book.
+            BookError: If there's a technical failure updating the database.
+        """
 
         loan: Loan | None = self.db.get_active_loan(book_id)
         if not loan:

@@ -5,6 +5,8 @@ from typing import Optional
 
 @dataclass
 class User:
+    """Represents a registered member of the library system."""
+
     username: str
     email: str
     id: int | None = None
@@ -12,6 +14,8 @@ class User:
 
 @dataclass
 class Book:
+    """Represents a physical or digital book in the collection."""
+
     title: str
     author: str
     is_available: bool = True
@@ -20,6 +24,8 @@ class Book:
 
 @dataclass
 class Loan:
+    """Represents the historical or active record of a book lent to a user."""
+
     user_id: int
     book_id: int
     loan_date: date
