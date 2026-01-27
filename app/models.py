@@ -2,6 +2,11 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Optional
 
+# Type Aliases for better IDE support and domain clarity
+BookID = int
+UserID = int
+LoanID = int
+
 
 @dataclass
 class User:
@@ -9,7 +14,7 @@ class User:
 
     username: str
     email: str
-    id: int | None = None
+    id: UserID | None = None
 
 
 @dataclass
@@ -19,7 +24,7 @@ class Book:
     title: str
     author: str
     is_available: bool = True
-    id: int | None = None
+    id: BookID | None = None
 
 
 @dataclass
@@ -30,4 +35,4 @@ class Loan:
     book_id: int
     loan_date: date
     return_date: Optional[date] = None
-    id: int | None = None
+    id: LoanID | None = None

@@ -1,6 +1,6 @@
 import re
 from datetime import date
-from .models import User, Book, Loan
+from .models import User, Book, Loan, UserID, BookID
 from .protocols import DbProtocol
 from app.exceptions import BookError, UserError, BookAlreadyLoanedError, LoanError
 
@@ -15,6 +15,7 @@ class LibraryService:
         """Initializes the service with a specific database implementation."""
         self.db = db
 
+    # --- REGISTRATION ---
     def register_book(self, book: Book) -> None:
         """
         Validates and adds a new book to the system.
@@ -49,6 +50,7 @@ class LibraryService:
 
         self.db.add_user(user)
 
+    # --- BUSINESS LOGIC ---
     def check_book(self, book_id: int) -> bool:
         """
         Performs deep validation on a book's availability and loan status.
@@ -88,7 +90,9 @@ class LibraryService:
 
         return True
 
-    def create_loan(self, user_id: int, book_id: int, loan_date: date) -> Loan | None:
+    def create_loan(
+        self, user_id: UserID, book_id: BookID, loan_date: date
+    ) -> Loan | None:
         """
         High-level process to create a loan, including all safety checks.
 
@@ -131,3 +135,20 @@ class LibraryService:
 
         if not self.db.remove_active_loan(book_id):
             raise LoanError("Technical error: could not remove loan from active list")
+
+    # --- QUERY OPERATIONS ---
+    def get_all_books(self) -> list[Book]:
+        """Retrieves the complete list of books available in the system."""
+        return self.db.get_all_books()
+
+    def get_all_users(self) -> list[User]:
+        """Retrieves all registered library members."""
+        return self.db.get_all_users()
+
+    def get_all_loans(self) -> list[Loan]:
+        """Retrieves the entire history of book loans."""
+        return self.db.get_all_loans()
+
+    def get_active_loans(self) -> list[Loan]:
+        """Provides a real-time list of books that are currently out on loan."""
+        return self.db.get_all_active_loans()

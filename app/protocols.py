@@ -1,6 +1,6 @@
 from datetime import date
 from typing import Protocol
-from .models import Book, User, Loan
+from .models import Book, User, Loan, BookID, UserID
 
 
 class DbProtocol(Protocol):
@@ -15,32 +15,48 @@ class DbProtocol(Protocol):
         """Persists a new user record."""
         ...
 
-    def save_loan(self, loan: Loan, book_id: int):
+    def save_loan(self, loan: Loan, book_id: BookID):
         """Stores a new loan transaction associated with a book."""
         ...
 
-    def remove_active_loan(self, book_id: int) -> bool:
+    def remove_active_loan(self, book_id: BookID) -> bool:
         """Deletes a loan from active records. Returns True if successful."""
         ...
 
     # --- QUERY METHODS ---
-    def get_book_by_id(self, book_id: int) -> Book | None:
+    def get_book_by_id(self, book_id: BookID) -> Book | None:
         """Retrieves a book by its ID. Returns None if not found."""
         ...
 
-    def get_user_by_id(self, user_id: int) -> User | None:
+    def get_user_by_id(self, user_id: UserID) -> User | None:
         """Retrieves a user by their ID. Returns None if not found."""
         ...
 
-    def get_active_loan(self, book_id: int) -> Loan | None:
+    def get_active_loan(self, book_id: BookID) -> Loan | None:
         """Finds the current non-returned loan for a book."""
         ...
 
+    def get_all_books(self) -> list[Book]:
+        """Retrieves all books stored in the database repository."""
+        ...
+
+    def get_all_users(self) -> list[User]:
+        """Retrieves all registered users from the database repository."""
+        ...
+
+    def get_all_loans(self) -> list[Loan]:
+        """Retrieves the complete historical record of all loans."""
+        ...
+
+    def get_all_active_loans(self) -> list[Loan]:
+        """Retrieves all currently active and non-returned loans."""
+        ...
+
     # --- STATE MANAGEMENT METHODS ---
-    def update_book_availability(self, book_id: int, is_available: bool) -> bool:
+    def update_book_availability(self, book_id: BookID, is_available: bool) -> bool:
         """Updates the availability status of a book."""
         ...
 
-    def update_loan_status(self, book_id: int, return_date: date) -> bool:
+    def update_loan_status(self, book_id: BookID, return_date: date) -> bool:
         """Updates a loan record with a return date."""
         ...
