@@ -25,11 +25,15 @@ class DbProtocol(Protocol):
 
     # --- QUERY METHODS ---
     def get_book_by_id(self, book_id: BookID) -> Book | None:
-        """Retrieves a book by its ID. Returns None if not found."""
+        """Retrieves a book by its ID."""
+        ...
+
+    def get_book_by_title(self, book_title: str) -> Book | None:
+        """Retrieves a book by its title."""
         ...
 
     def get_user_by_id(self, user_id: UserID) -> User | None:
-        """Retrieves a user by their ID. Returns None if not found."""
+        """Retrieves a user by their ID."""
         ...
 
     def get_active_loan(self, book_id: BookID) -> Loan | None:

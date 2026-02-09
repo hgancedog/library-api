@@ -57,6 +57,13 @@ class InMemoryDatabase:
         """Retrieves a book from the internal dictionary."""
         return self._books.get(book_id)
 
+    def get_book_by_title(self, book_title: str) -> Book | None:
+        """Performs a lookup in the internal dictionary to find a book by its title."""
+        return next(
+            (b for b in self._books.values() if b.title.lower() == book_title.lower()),
+            None,
+        )
+
     def get_user_by_id(self, user_id: UserID) -> User | None:
         """Retrieves a user from the internal dictionary."""
         return self._users.get(user_id)

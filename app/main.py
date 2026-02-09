@@ -9,6 +9,12 @@ if __name__ == "__main__":
     library: LibraryService = LibraryService(Db)
 
     book1: Book = Book("The Great Gatsby", "F. Scott Fitzgerald")
-    library.register_book(book1)
+    book2: Book = Book("Moby Dick", "Herman Melville")
+    book3: Book = Book("La Tabla de Flandes", "Arturo Perez Reverte")
 
-    print(library.get_all_books())
+    library.register_book(book1)
+    library.register_book(book2)
+    library.register_book(book3)
+
+    book = library.get_book_by_title("the GREAT gATsby")
+    print(book)
