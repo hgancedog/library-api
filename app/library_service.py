@@ -138,7 +138,7 @@ class LibraryService:
         """
 
         loan: Loan | None = self.db.get_active_loan(book_id)
-        if not loan:
+        if loan is None:
             raise LoanError(f"No active loan found for book Id {book_id}")
 
         if not self.db.update_loan_status(book_id, return_date):
@@ -165,7 +165,7 @@ class LibraryService:
             BookNotFoundError: If no book is found with the specified ID.
         """
         book = self.db.get_book_by_id(book_id)
-        if not book:
+        if book is None:
             raise BookNotFoundError(f"Book with ID {book_id} does not exist")
 
         return book
@@ -185,7 +185,7 @@ class LibraryService:
         """
         book = self.db.get_book_by_title(search_title)
 
-        if not book:
+        if book is None:
             raise BookNotFoundError(f"No book found with title: '{search_title}'")
 
         return book
@@ -206,7 +206,7 @@ class LibraryService:
         """
         user = self.db.get_user_by_id(user_id)
 
-        if not user:
+        if user is None:
             raise UserError(f"User with ID {user_id} does not exist")
 
         return user

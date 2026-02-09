@@ -92,7 +92,7 @@ class InMemoryDatabase:
     def update_book_availability(self, book_id: BookID, is_available: bool) -> bool:
         """Directly modifies the availability attribute of a stored book."""
         book: Book | None = self.get_book_by_id(book_id)
-        if book:
+        if book is not None:
             book.is_available = is_available
             return True
         return False
@@ -100,7 +100,7 @@ class InMemoryDatabase:
     def update_loan_status(self, book_id: BookID, return_date: date) -> bool:
         """Updates the return_date of an active loan record."""
         loan: Loan | None = self._active_loans.get(book_id)
-        if loan:
+        if loan is not None:
             loan.return_date = return_date
             return True
         return False
