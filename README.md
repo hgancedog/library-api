@@ -24,7 +24,7 @@ The project is organized into sequential stages. Each stage is hosted in its own
 
 ## 🛠️ Global Tech Stack
 
-**Language:** Python 3.10+ (Advanced typing, dataclasses)
+**Language:** Python 3.10+ (developed with 3.13, Advanced typing, dataclasses)
 **Framework:** FastAPI
 **Type Checking:** Pyright / Pylance
 **Databases:** PostgreSQL, MongoDB, SQLite, Redis

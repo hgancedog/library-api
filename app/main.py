@@ -1,10 +1,9 @@
+from .in_memory_database import InMemoryDatabase
+from .library_service import LibraryService
 from .models import Book
 from .protocols import DbProtocol
-from .library_service import LibraryService
-from .in_memory_database import InMemoryDatabase
 
 if __name__ == "__main__":
-
     Db: DbProtocol = InMemoryDatabase()
     library: LibraryService = LibraryService(Db)
 
