@@ -1,0 +1,15 @@
+repos:
+  - repo: local
+    hooks:
+      - id: check-venv
+        name: Check virtual environment is active
+        entry: python scripts/check_venv.py
+        language: system
+        stages: [pre-commit]
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.0
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format

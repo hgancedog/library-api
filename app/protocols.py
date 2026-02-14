@@ -1,6 +1,7 @@
 from datetime import date
 from typing import Protocol
-from .models import Book, User, Loan, BookID, UserID
+
+from .models import Book, BookID, Loan, User, UserID
 
 
 class DbProtocol(Protocol):

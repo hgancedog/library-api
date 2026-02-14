@@ -1,14 +1,16 @@
 import re
 from datetime import date
-from .models import User, Book, Loan, UserID, BookID
-from .protocols import DbProtocol
+
 from app.exceptions import (
+    BookAlreadyLoanedError,
     BookError,
     BookNotFoundError,
-    UserError,
-    BookAlreadyLoanedError,
     LoanError,
+    UserError,
 )
+
+from .models import Book, BookID, Loan, User, UserID
+from .protocols import DbProtocol
 
 
 class LibraryService:
@@ -34,7 +36,7 @@ class LibraryService:
         """
 
         if not book.author or not book.author.strip():
-            raise BookError(f"Book must have an author")
+            raise BookError("Book must have an author")
 
         if not book.title or not book.title.strip():
             raise BookError("Book must have a title")
@@ -58,7 +60,7 @@ class LibraryService:
             raise UserError(f"Invalid email format: {user.email}")
 
         if len(user.username) < 3 or not user.username.isalnum():
-            raise UserError(f"Username must be alphanumeric and at least 3 characters")
+            raise UserError("Username must be alphanumeric and at least 3 characters")
 
         self.db.add_user(user)
 

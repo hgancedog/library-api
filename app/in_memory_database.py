@@ -1,9 +1,10 @@
-from .models import Book, User, Loan, BookID, LoanID, UserID
 from datetime import date
+
+from .models import Book, BookID, Loan, LoanID, User, UserID
+from .protocols import DbProtocol
 
 
 class InMemoryDatabase:
-
     def __init__(self):
         """Initializes data structures and auto-incrementing counters."""
         # Maps book_id (int) to its corresponding Book object
@@ -106,7 +107,5 @@ class InMemoryDatabase:
         return False
 
 
-# Those lines ensure InMemoryDatabase correctly implements DbProtocol (Duck Typing validation)
-from .protocols import DbProtocol
-
+# This line ensure InMemoryDatabase correctly implements DbProtocol (Duck Typing validation)
 _: DbProtocol = InMemoryDatabase()
