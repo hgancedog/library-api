@@ -1,21 +1,10 @@
 {
   "_comment": {
     "profile": "Simple (Stage 1-4)",
-    "description": "Agent model and thinking level assignments scale with project complexity across three profiles. Re-evaluate at each complexity boundary.",
-    "profiles": {
-      "simple_s1_s4": {
-        "trigger": "Python dataclasses, in-memory DB, single process",
-        "applied": "current",
-        "changes": "baseline — Pro for reasoning phases, Flash for execution, thinking off/minimal for mechanical agents"
-      },
-      "intermediate_s5_s8": {
-        "trigger": "Docker, microservices, FastAPI, Redis, RabbitMQ, CI/CD, LLMs/RAG",
-        "changes": "sdd-design→high, reviewer→high, oracle→high, sdd-tasks→medium, sdd-apply→low, worker→low, researcher→medium"
-      },
-      "advanced_s9_s12": {
-        "trigger": "Kubernetes, Terraform, Kafka, JWT, Prometheus, distributed tracing, AI agents",
-        "changes": "sdd-proposal→high, sdd-spec→high"
-      }
+    "applies_to": "Python dataclasses, in-memory DB, single process — foundational backend patterns",
+    "assignment": {
+      "deepseek-v4-pro": "reasoning-heavy phases: proposal, spec, design, review, planning, research",
+      "deepseek-v4-flash": "execution and mechanical phases: explore, apply, verify, sync, archive, init, status, scout, delegate, worker"
     },
     "deepseek_note": "DeepSeek collapses thinking levels: off→disabled, minimal/low/medium/high→'high' effort, xhigh→'max' effort. Semantic levels preserved for future model migration."
   },
