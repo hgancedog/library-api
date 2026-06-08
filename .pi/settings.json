@@ -1,0 +1,29 @@
+{
+  "subagents": {
+    "agentOverrides": {
+      "sdd-proposal":    { "model": "deepseek-v4-pro",   "thinkingLevel": "medium" },
+      "sdd-spec":        { "model": "deepseek-v4-pro",   "thinkingLevel": "medium" },
+      "sdd-design":      { "model": "deepseek-v4-pro",   "thinkingLevel": "medium" },
+      "reviewer":        { "model": "deepseek-v4-pro",   "thinkingLevel": "medium" },
+      "oracle":          { "model": "deepseek-v4-pro",   "thinkingLevel": "medium" },
+
+      "sdd-onboard":     { "model": "deepseek-v4-pro",   "thinkingLevel": "low" },
+      "context-builder": { "model": "deepseek-v4-pro",   "thinkingLevel": "low" },
+      "researcher":      { "model": "deepseek-v4-pro",   "thinkingLevel": "low" },
+      "planner":         { "model": "deepseek-v4-pro",   "thinkingLevel": "low" },
+      "sdd-tasks":       { "model": "deepseek-v4-pro",   "thinkingLevel": "low" },
+
+      "sdd-explore":     { "model": "deepseek-v4-flash", "thinkingLevel": "minimal" },
+      "sdd-apply":       { "model": "deepseek-v4-flash", "thinkingLevel": "minimal" },
+      "worker":          { "model": "deepseek-v4-flash", "thinkingLevel": "minimal" },
+
+      "sdd-init":        { "model": "deepseek-v4-flash", "thinkingLevel": "off" },
+      "sdd-status":      { "model": "deepseek-v4-flash", "thinkingLevel": "off" },
+      "scout":           { "model": "deepseek-v4-flash", "thinkingLevel": "off" },
+      "delegate":        { "model": "deepseek-v4-flash", "thinkingLevel": "off" },
+      "sdd-verify":      { "model": "deepseek-v4-flash", "thinkingLevel": "off" },
+      "sdd-sync":        { "model": "deepseek-v4-flash", "thinkingLevel": "off" },
+      "sdd-archive":     { "model": "deepseek-v4-flash", "thinkingLevel": "off" }
+    }
+  }
+}
