@@ -2,6 +2,7 @@
 requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
+# NOTE: name, version, author, and ruff line-length are also in openspec/config.yaml — keep in sync
 [project]
 name = "library-api"
 version = "1.0.0"

@@ -1,0 +1,418 @@
+# openspec/config.yaml
+# SDD / OpenSpec project configuration for library-api
+# Generated: 2026-06-07 · Stage 1 · Foundations
+# Do not destructively edit the SDD section by hand — update via Pi SDD phases.
+# Project context (stack, conventions, roadmap) is safe to update manually.
+
+# ──────────────────────────────────────────────────────────────
+# PROJECT IDENTITY
+# ──────────────────────────────────────────────────────────────
+# NOTE: name, version, author, and ruff line-length are also in pyproject.toml — keep in sync
+project:
+  name: library-api
+  version: "1.0.0" # pyproject.toml version, matches stage
+  description: >
+    Library Management System — a backend learning project that evolves through
+    12 stages from in-memory Python to AI-native microservices architecture.
+    Each stage lives in its own Git branch and introduces a new layer of
+    professional backend engineering.
+  author: Hector Gancedo Grade
+  root: /home/heks/PROJECTS/library-api
+  language: python
+  python_version: "3.13"
+  current_stage: 1
+  current_stage_name: Foundations
+  current_branch: stage1-inmemory # active development branch
+
+  roadmap_file: project_docs/ROADMAP_FINAL_2026.md
+  total_stages: 12
+
+# ──────────────────────────────────────────────────────────────
+# STACK — STAGE 1
+# ──────────────────────────────────────────────────────────────
+stack:
+  # Runtime / language
+  - tool: Python
+    version: "3.13"
+    role: Primary language
+
+  # Static analysis
+  - tool: Pyright
+    version: latest # pyrightconfig.json: typeCheckingMode=strict
+    role: Static type checker (strict mode)
+    config: pyrightconfig.json
+
+  # Linting / formatting
+  - tool: Ruff
+    version: "0.15.0"
+    role: Linter + formatter
+    config: pyproject.toml [tool.ruff]
+    line_length: 88
+    target_version: py313
+    lint_rules: ["E", "F", "W", "I", "N"]
+    ignored_rules: ["E501"]
+    quote_style: double
+
+  # Testing — not in deps yet, must be added
+  - tool: Pytest
+    version: TBD # needs to be added to pyproject.toml dev deps
+    role: Test runner
+    status: pending_install # no tests exist yet
+
+  # Git hooks
+  - tool: pre-commit
+    version: "4.5.1"
+    role: Pre-commit hooks (ruff + venv check)
+    config: .pre-commit-config.yaml
+
+  # HTTP framework — present in deps, NOT used in Stage 1
+  - tool: FastAPI
+    version: "0.122.0"
+    role: HTTP framework (Stage 7+, not active in Stage 1)
+    status: dormant
+
+  # Type safety helpers
+  - tool: typeguard
+    version: "4.4.4"
+    role: Runtime type checking utility
+
+# ──────────────────────────────────────────────────────────────
+# COMMANDS
+# ──────────────────────────────────────────────────────────────
+commands:
+  test: "pytest app/tests/ -v"
+  test_coverage: "pytest app/tests/ -v --cov=app --cov-report=term-missing"
+  lint: "ruff check app/"
+  format: "ruff format app/"
+  typecheck: "pyright"
+  all_checks: "ruff check app/ && ruff format app/ && pyright"
+
+  # Stage 1 manual smoke run (no real tests yet)
+  smoke_run: "python -m app.main"
+
+# ──────────────────────────────────────────────────────────────
+# FILE STRUCTURE — STAGE 1
+# ──────────────────────────────────────────────────────────────
+structure:
+  app_root: app/
+  test_dir: app/tests/ # must be created when pytest is added
+  source_files:
+    - app/__init__.py
+    - app/models.py # dataclass domain models + type aliases
+    - app/exceptions.py # exception hierarchy
+    - app/protocols.py # DbProtocol (Protocol, not ABC)
+    - app/in_memory_database.py # InMemoryDatabase implementing DbProtocol
+    - app/library_service.py # LibraryService — pure business logic
+    - app/main.py # entry point / manual smoke runner
+  config_files:
+    - pyproject.toml
+    - pyrightconfig.json
+    - .pre-commit-config.yaml
+  docs:
+    - README.md
+    - project_docs/ROADMAP_FINAL_2026.md
+
+# ──────────────────────────────────────────────────────────────
+# DOMAIN MODEL
+# ──────────────────────────────────────────────────────────────
+domain:
+  entities:
+    - name: Book
+      file: app/models.py
+      kind: dataclass
+      fields: [title, author, is_available, id]
+      id_type: BookID # type alias = int
+
+    - name: User
+      file: app/models.py
+      kind: dataclass
+      fields: [username, email, id]
+      id_type: UserID # type alias = int
+
+    - name: Loan
+      file: app/models.py
+      kind: dataclass
+      fields: [user_id, book_id, loan_date, return_date, id]
+      id_type: LoanID # type alias = int
+
+  type_aliases:
+    BookID: int
+    UserID: int
+    LoanID: int
+
+  exceptions:
+    hierarchy:
+      LibraryApiError:
+        - BookError:
+            - BookNotFoundError
+            - BookAlreadyLoanedError
+        - UserError
+        - LoanError
+    file: app/exceptions.py
+
+  protocols:
+    - name: DbProtocol
+      file: app/protocols.py
+      kind: Protocol # typing.Protocol, NOT ABC
+      methods:
+        command:
+          - "add_book(book: Book) -> None"
+          - "add_user(user: User) -> None"
+          - "save_loan(loan: Loan, book_id: BookID) -> None"
+          - "remove_active_loan(book_id: BookID) -> bool"
+        query:
+          - "get_book_by_id(book_id: BookID) -> Book | None"
+          - "get_book_by_title(book_title: str) -> Book | None"
+          - "get_user_by_id(user_id: UserID) -> User | None"
+          - "get_active_loan(book_id: BookID) -> Loan | None"
+          - "get_all_books() -> list[Book]"
+          - "get_all_users() -> list[User]"
+          - "get_all_loans() -> list[Loan]"
+          - "get_all_active_loans() -> list[Loan]"
+        state:
+          - "update_book_availability(book_id: BookID, is_available: bool) -> bool"
+          - "update_loan_status(book_id: BookID, return_date: date) -> bool"
+
+  implementations:
+    - name: InMemoryDatabase
+      file: app/in_memory_database.py
+      implements: DbProtocol
+      internals:
+        _books: "dict[BookID, Book]"
+        _users: "dict[UserID, User]"
+        _loan_history: "dict[LoanID, Loan]"
+        _active_loans: "dict[BookID, Loan]" # keyed by book_id, not loan_id
+      duck_typing_validation: true # _: DbProtocol = InMemoryDatabase() at module level
+
+  services:
+    - name: LibraryService
+      file: app/library_service.py
+      depends_on: DbProtocol # injected via __init__, no direct import of InMemoryDatabase
+      public_methods:
+        registration:
+          - register_book
+          - register_user
+        business_logic:
+          - check_book
+          - create_loan
+          - mark_loan_as_returned
+        queries:
+          - get_book_by_id
+          - get_book_by_title
+          - get_user_by_id
+          - get_all_books
+          - get_all_users
+          - get_all_loans
+          - get_active_loans
+
+# ──────────────────────────────────────────────────────────────
+# CODE CONVENTIONS
+# ──────────────────────────────────────────────────────────────
+conventions:
+  # Typing
+  union_syntax: "X | None" # prefer over Optional[X] (one legacy Optional remains in models.py)
+  optional_policy: migrate_to_new_syntax # Loan.return_date still uses Optional[date] — fix in Stage 1
+  type_aliases: true # BookID, UserID, LoanID for readability
+  protocol_over_abc: true # use typing.Protocol for interfaces, not ABC
+  strict_pyright: true # typeCheckingMode = strict
+
+  # Models
+  domain_model_kind: dataclass # NOT Pydantic at Stage 1; Pydantic arrives at Stage 3
+  model_id_default: None # IDs are assigned by the DB layer, default None in constructors
+
+  # Class design
+  private_prefix: "_" # all implementation-private attributes use _ prefix
+  duck_typing_guard: true # module-level `_: Protocol = Implementation()` for structural check
+
+  # Naming
+  case_convention:
+    variables: snake_case
+    functions: snake_case
+    classes: PascalCase
+    constants: UPPER_SNAKE_CASE
+  language: english # all code, docstrings, and comments in English
+
+  # Formatting
+  line_length: 88 # enforced by Ruff
+  quote_style: double # enforced by ruff format
+
+  # Validation in LibraryService (Stage 1 — no Pydantic yet)
+  input_validation: manual_in_service # email regex, username length/isalnum checked in register_*
+
+# ──────────────────────────────────────────────────────────────
+# SDD CONFIGURATION
+# ──────────────────────────────────────────────────────────────
+sdd:
+  mode: strict_tdd
+  description: >
+    Test-driven development is mandatory from Stage 1 onward.
+    No production code is written before a failing test exists.
+    The unit-test suite must be implementation-agnostic: swapping
+    InMemoryDatabase for any other DbProtocol implementation must
+    not require test changes (Stage 1 completion signal).
+
+  execution_mode: interactive # pause between phases, confirm before next
+  artifact_store: both # openspec files + Engram memory
+  chained_pr_strategy: auto-forecast # Pi estimates diff size and recommends single/chained PRs
+  review_budget_lines: 200 # ~200 changed lines per PR
+
+  # Phase gate rules
+  phase_gate: one_at_a_time # complete only the assigned phase per turn
+  approval_keywords: ["continue", "dale", "go on", "next"]
+
+  # Pre-proposal interaction
+  proposal_question_rounds: true # ask 3–5 product/domain questions before writing PRD
+  skip_harness_questions_at_proposal: true # don't ask about test commands etc. at proposal time
+
+  phases:
+    explore:
+      description: Read code, identify gaps, summarise current state
+    proposal:
+      description: PRD-style change proposal with scope and constraints
+      question_rounds: 1-2 # offer question rounds before writing
+    spec:
+      description: Behaviour specification (Given/When/Then)
+    design:
+      description: Module-level design, interfaces, data flow
+    tasks:
+      description: Ordered implementation task list with AC per task
+    apply:
+      description: Write production + test code, TDD red-green-refactor
+    verify:
+      description: Run test suite, lint, typecheck; report results
+
+  # Stage 1 completion criteria (from ROADMAP)
+  stage_1_done_when:
+    - Tests pass regardless of which DbProtocol implementation is injected
+    - "Pyright strict mode: zero errors"
+    - "Ruff: zero lint warnings"
+    - "Coverage: >=90% on business logic (LibraryService + InMemoryDatabase)"
+
+# ──────────────────────────────────────────────────────────────
+# ROADMAP SNAPSHOT
+# ──────────────────────────────────────────────────────────────
+roadmap:
+  file: project_docs/ROADMAP_FINAL_2026.md
+  stages:
+    1:
+      {
+        name: Foundations,
+        branch: stage1-inmemory,
+        stack: "Python 3.13, Pyright, Ruff, Pytest",
+      }
+    2:
+      {
+        name: Persistence,
+        branch: stage2-sqlite,
+        stack: "SQLite, SQLAlchemy, Alembic",
+      }
+    3:
+      {
+        name: Security Base,
+        branch: stage3-postgres,
+        stack: "OWASP, Pydantic v2, Bandit",
+      }
+    4:
+      {
+        name: Pro Databases,
+        branch: stage4-docker,
+        stack: "PostgreSQL, MongoDB, Redis intro",
+      }
+    5:
+      {
+        name: Docker,
+        branch: stage4-docker,
+        stack: "Docker, Docker Compose, multi-stage builds",
+      }
+    6:
+      {
+        name: Cloud Basics,
+        branch: stage5-microservices,
+        stack: "Railway/Render, GitHub Actions CI/CD",
+      }
+    7:
+      {
+        name: Microservices,
+        branch: stage5-microservices,
+        stack: "FastAPI, Redis, RabbitMQ, Pact",
+      }
+    8:
+      {
+        name: AI Service,
+        branch: stage6-kubernetes,
+        stack: "LLMs, RAG, pgvector, LangSmith",
+      }
+    9:
+      {
+        name: Kubernetes,
+        branch: stage6-kubernetes,
+        stack: "K8s, AWS EKS/GKE, Helm",
+      }
+    10:
+      { name: Infrastructure, branch: stage7-extras, stack: "Terraform, Kafka" }
+    11:
+      {
+        name: Production,
+        branch: stage7-extras,
+        stack: "JWT, Prometheus, Grafana, OpenTelemetry",
+      }
+    12:
+      {
+        name: Agents,
+        branch: stage7-extras,
+        stack: "LangGraph, Semantic Kernel, LLM-as-a-Judge",
+      }
+
+  next_stage_prerequisites:
+    - pytest added to dev dependencies in pyproject.toml
+    - app/tests/ directory created with __init__.py
+    - All LibraryService methods covered by unit tests
+    - Pyright strict mode passes with zero errors
+    - Ruff passes with zero issues
+    - "Coverage >=90% on business logic"
+
+# ──────────────────────────────────────────────────────────────
+# KNOWN ISSUES / TECH DEBT — STAGE 1
+# ──────────────────────────────────────────────────────────────
+tech_debt:
+  - id: TD-001
+    file: app/models.py
+    description: >
+      Loan.return_date uses Optional[date] instead of date | None.
+      Should be migrated for consistency with the rest of the codebase.
+    severity: minor
+    stage_to_fix: 1
+
+  - id: TD-002
+    description: >
+      pytest is not yet in pyproject.toml dev dependencies.
+      app/tests/ directory does not exist. No tests have been written yet.
+      This is the primary blocker for Stage 1 completion.
+    severity: blocking
+    stage_to_fix: 1
+
+  - id: TD-004
+    file: pyproject.toml, openspec/config.yaml
+    description: >
+      Four fields are duplicated between pyproject.toml and openspec/config.yaml
+      (name, version, author, line-length). Keep them in sync manually.
+    severity: minor
+    stage_to_fix: 1
+    resolution: note_only
+
+  - id: TD-003
+    file: app/library_service.py
+    description: >
+      register_user validates email with a plain regex in service code.
+      This should be replaced by Pydantic v2 validators when Stage 3 introduces Pydantic.
+      Acceptable as manual validation for Stage 1.
+    severity: minor
+    stage_to_fix: 3
+
+# ──────────────────────────────────────────────────────────────
+# SKILL REGISTRY
+# ──────────────────────────────────────────────────────────────
+skill_registry:
+  path: app/.atl/skill-registry.md # existing registry (currently empty — no skills indexed)
+  root_registry: .atl/skill-registry.md # does not exist at project root yet
+  status: empty # no SKILL.md files indexed as of 2026-06-07
