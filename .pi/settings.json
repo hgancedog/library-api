@@ -1,38 +1,83 @@
 {
-  "_comment": {
-    "profile": "Simple (Stage 1-4)",
-    "applies_to": "Python dataclasses, in-memory DB, single process — foundational backend patterns",
-    "assignment": {
-      "deepseek-v4-pro": "reasoning-heavy phases: proposal, spec, design, review, planning, research",
-      "deepseek-v4-flash": "execution and mechanical phases: explore, apply, verify, sync, archive, init, status, scout, delegate, worker"
-    },
-    "deepseek_note": "DeepSeek collapses thinking levels: off→disabled, minimal/low/medium/high→'high' effort, xhigh→'max' effort. Semantic levels preserved for future model migration."
-  },
-  "subagents": {
-    "agentOverrides": {
-      "sdd-proposal":    { "model": "deepseek-v4-pro",   "thinkingLevel": "medium" },
-      "sdd-spec":        { "model": "deepseek-v4-pro",   "thinkingLevel": "medium" },
-      "sdd-design":      { "model": "deepseek-v4-pro",   "thinkingLevel": "medium" },
-      "reviewer":        { "model": "deepseek-v4-pro",   "thinkingLevel": "medium" },
-      "oracle":          { "model": "deepseek-v4-pro",   "thinkingLevel": "medium" },
-
-      "sdd-onboard":     { "model": "deepseek-v4-pro",   "thinkingLevel": "low" },
-      "context-builder": { "model": "deepseek-v4-pro",   "thinkingLevel": "low" },
-      "researcher":      { "model": "deepseek-v4-pro",   "thinkingLevel": "low" },
-      "planner":         { "model": "deepseek-v4-pro",   "thinkingLevel": "low" },
-      "sdd-tasks":       { "model": "deepseek-v4-pro",   "thinkingLevel": "low" },
-
-      "sdd-explore":     { "model": "deepseek-v4-flash", "thinkingLevel": "minimal" },
-      "sdd-apply":       { "model": "deepseek-v4-flash", "thinkingLevel": "minimal" },
-      "worker":          { "model": "deepseek-v4-flash", "thinkingLevel": "minimal" },
-
-      "sdd-init":        { "model": "deepseek-v4-flash", "thinkingLevel": "off" },
-      "sdd-status":      { "model": "deepseek-v4-flash", "thinkingLevel": "off" },
-      "scout":           { "model": "deepseek-v4-flash", "thinkingLevel": "off" },
-      "delegate":        { "model": "deepseek-v4-flash", "thinkingLevel": "off" },
-      "sdd-verify":      { "model": "deepseek-v4-flash", "thinkingLevel": "off" },
-      "sdd-sync":        { "model": "deepseek-v4-flash", "thinkingLevel": "off" },
-      "sdd-archive":     { "model": "deepseek-v4-flash", "thinkingLevel": "off" }
-    }
-  }
+	"_comment": {
+		"profile": "Simple (Stage 1-4)",
+		"applies_to": "Python dataclasses, in-memory DB, single process — foundational backend patterns",
+		"deepseek_note": "DeepSeek collapses thinking levels: off→disabled, minimal/low/medium/high→'high' effort, xhigh→'max' effort. Semantic levels preserved for future model migration."
+	},
+	"subagents": {
+		"agentOverrides": {
+			"sdd-proposal": {
+				"model": "deepseek-v4-pro",
+				"thinkingLevel": "medium"
+			},
+			"sdd-spec": {
+				"model": "deepseek-v4-pro",
+				"thinkingLevel": "medium"
+			},
+			"sdd-design": {
+				"model": "deepseek-v4-pro",
+				"thinkingLevel": "medium"
+			},
+			"reviewer": {
+				"thinkingLevel": "medium"
+			},
+			"oracle": {
+				"thinkingLevel": "medium"
+			},
+			"sdd-onboard": {
+				"model": "deepseek-v4-pro",
+				"thinkingLevel": "low"
+			},
+			"context-builder": {
+				"thinkingLevel": "low"
+			},
+			"researcher": {
+				"thinkingLevel": "low"
+			},
+			"planner": {
+				"thinkingLevel": "low"
+			},
+			"sdd-tasks": {
+				"model": "deepseek-v4-pro",
+				"thinkingLevel": "low"
+			},
+			"sdd-explore": {
+				"model": "deepseek-v4-flash",
+				"thinkingLevel": "minimal"
+			},
+			"sdd-apply": {
+				"model": "deepseek-v4-flash",
+				"thinkingLevel": "minimal"
+			},
+			"worker": {
+				"thinkingLevel": "minimal"
+			},
+			"sdd-init": {
+				"model": "deepseek-v4-flash",
+				"thinkingLevel": "off"
+			},
+			"sdd-status": {
+				"model": "deepseek-v4-flash",
+				"thinkingLevel": "off"
+			},
+			"scout": {
+				"thinkingLevel": "off"
+			},
+			"delegate": {
+				"thinkingLevel": "off"
+			},
+			"sdd-verify": {
+				"model": "deepseek-v4-flash",
+				"thinkingLevel": "off"
+			},
+			"sdd-sync": {
+				"model": "deepseek-v4-flash",
+				"thinkingLevel": "off"
+			},
+			"sdd-archive": {
+				"model": "deepseek-v4-flash",
+				"thinkingLevel": "off"
+			}
+		}
+	}
 }

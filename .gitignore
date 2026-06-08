@@ -28,3 +28,5 @@ ENV/
 # Ignore local SQLite databases
 *.db
 *.sqlite3
+# Local Pi runtime state
+.atl/
