@@ -16,18 +16,18 @@
 
 ```bash
 # Tests
-pytest app/tests/ -v
-pytest app/tests/ -v --cov=app --cov-report=term-missing
+pytest src/app/tests/ -v
+pytest src/app/tests/ -v --cov=src/app --cov-report=term-missing
 
 # Lint + format
-ruff check app/
-ruff format app/
+ruff check src/
+ruff format src/
 
 # Type check
 pyright
 
 # All checks in one pass
-ruff check app/ && ruff format app/ && pyright
+ruff check src/ && ruff format src/ && pyright
 ```
 
 > ⚠️ `pytest` is not yet in dev deps — must be added to `pyproject.toml` before running tests.
@@ -35,20 +35,21 @@ ruff check app/ && ruff format app/ && pyright
 ## File structure
 
 ```
-app/
-  models.py           # dataclass domain models + type aliases
-  exceptions.py       # exception hierarchy
-  protocols.py        # DbProtocol (typing.Protocol)
-  in_memory_database.py  # InMemoryDatabase — implements DbProtocol
-  library_service.py  # LibraryService — pure business logic, no DB import
-  main.py             # manual smoke runner (temporary)
-  tests/              # ← must be created; empty for now
+src/
+  app/
+    models.py           # dataclass domain models + type aliases
+    exceptions.py       # exception hierarchy
+    protocols.py        # DbProtocol (typing.Protocol)
+    in_memory_database.py  # InMemoryDatabase — implements DbProtocol
+    library_service.py  # LibraryService — pure business logic, no DB import
+    main.py             # manual smoke runner (temporary)
+    tests/              # ← must be created; empty for now
 openspec/
   config.yaml         # SDD project config — source of truth for Pi phases
 project_docs/
   ROADMAP_FINAL_2026.md
 pyproject.toml
-pyrightconfig.json    # typeCheckingMode: strict, includes: [app]
+pyrightconfig.json    # typeCheckingMode: strict, includes: [src]
 .pre-commit-config.yaml  # ruff + ruff-format + venv-check
 ```
 

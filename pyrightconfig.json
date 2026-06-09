@@ -1,5 +1,5 @@
 {
-    "include": ["app"],
+    "include": ["src"],
     "typeCheckingMode": "strict",
     "reportMissingTypeStubs": false
 }

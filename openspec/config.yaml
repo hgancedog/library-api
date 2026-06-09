@@ -80,12 +80,12 @@ stack:
 # COMMANDS
 # ──────────────────────────────────────────────────────────────
 commands:
-  test: "pytest app/tests/ -v"
-  test_coverage: "pytest app/tests/ -v --cov=app --cov-report=term-missing"
-  lint: "ruff check app/"
-  format: "ruff format app/"
+  test: "pytest src/app/tests/ -v"
+  test_coverage: "pytest src/app/tests/ -v --cov=src/app --cov-report=term-missing"
+  lint: "ruff check src/"
+  format: "ruff format src/"
   typecheck: "pyright"
-  all_checks: "ruff check app/ && ruff format app/ && pyright"
+  all_checks: "ruff check src/ && ruff format src/ && pyright"
 
   # Stage 1 manual smoke run (no real tests yet)
   smoke_run: "python -m app.main"
@@ -94,16 +94,16 @@ commands:
 # FILE STRUCTURE — STAGE 1
 # ──────────────────────────────────────────────────────────────
 structure:
-  app_root: app/
-  test_dir: app/tests/ # must be created when pytest is added
+  app_root: src/app/
+  test_dir: src/app/tests/ # must be created when pytest is added
   source_files:
-    - app/__init__.py
-    - app/models.py # dataclass domain models + type aliases
-    - app/exceptions.py # exception hierarchy
-    - app/protocols.py # DbProtocol (Protocol, not ABC)
-    - app/in_memory_database.py # InMemoryDatabase implementing DbProtocol
-    - app/library_service.py # LibraryService — pure business logic
-    - app/main.py # entry point / manual smoke runner
+    - src/app/__init__.py
+    - src/app/models.py # dataclass domain models + type aliases
+    - src/app/exceptions.py # exception hierarchy
+    - src/app/protocols.py # DbProtocol (Protocol, not ABC)
+    - src/app/in_memory_database.py # InMemoryDatabase implementing DbProtocol
+    - src/app/library_service.py # LibraryService — pure business logic
+    - src/app/main.py # entry point / manual smoke runner
   config_files:
     - pyproject.toml
     - pyrightconfig.json
@@ -118,19 +118,19 @@ structure:
 domain:
   entities:
     - name: Book
-      file: app/models.py
+      file: src/app/models.py
       kind: dataclass
       fields: [title, author, is_available, id]
       id_type: BookID # type alias = int
 
     - name: User
-      file: app/models.py
+      file: src/app/models.py
       kind: dataclass
       fields: [username, email, id]
       id_type: UserID # type alias = int
 
     - name: Loan
-      file: app/models.py
+      file: src/app/models.py
       kind: dataclass
       fields: [user_id, book_id, loan_date, return_date, id]
       id_type: LoanID # type alias = int
@@ -148,11 +148,11 @@ domain:
             - BookAlreadyLoanedError
         - UserError
         - LoanError
-    file: app/exceptions.py
+    file: src/app/exceptions.py
 
   protocols:
     - name: DbProtocol
-      file: app/protocols.py
+      file: src/app/protocols.py
       kind: Protocol # typing.Protocol, NOT ABC
       methods:
         command:
@@ -175,7 +175,7 @@ domain:
 
   implementations:
     - name: InMemoryDatabase
-      file: app/in_memory_database.py
+      file: src/app/in_memory_database.py
       implements: DbProtocol
       internals:
         _books: "dict[BookID, Book]"
@@ -186,7 +186,7 @@ domain:
 
   services:
     - name: LibraryService
-      file: app/library_service.py
+      file: src/app/library_service.py
       depends_on: DbProtocol # injected via __init__, no direct import of InMemoryDatabase
       public_methods:
         registration:
@@ -376,7 +376,7 @@ roadmap:
 # ──────────────────────────────────────────────────────────────
 tech_debt:
   - id: TD-001
-    file: app/models.py
+    file: src/app/models.py
     description: >
       Loan.return_date uses Optional[date] instead of date | None.
       Should be migrated for consistency with the rest of the codebase.
@@ -401,7 +401,7 @@ tech_debt:
     resolution: note_only
 
   - id: TD-003
-    file: app/library_service.py
+    file: src/app/library_service.py
     description: >
       register_user validates email with a plain regex in service code.
       This should be replaced by Pydantic v2 validators when Stage 3 introduces Pydantic.
@@ -413,6 +413,6 @@ tech_debt:
 # SKILL REGISTRY
 # ──────────────────────────────────────────────────────────────
 skill_registry:
-  path: app/.atl/skill-registry.md # existing registry (currently empty — no skills indexed)
+  path: src/app/.atl/skill-registry.md # existing registry (currently empty — no skills indexed)
   root_registry: .atl/skill-registry.md # does not exist at project root yet
   status: empty # no SKILL.md files indexed as of 2026-06-07
