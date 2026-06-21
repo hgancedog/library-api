@@ -32,3 +32,7 @@ ENV/
 *.sqlite3
 # Local Pi runtime state
 .atl/
+
+# Personal learning docs
+project_docs/git-commands.md
+project_docs/python-theory.md
