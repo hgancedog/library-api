@@ -1,38 +1,14 @@
+import re
 from dataclasses import dataclass
-from datetime import date
-from typing import Optional
 
-# Type Aliases for better IDE support and domain clarity
-BookID = int
-UserID = int
-LoanID = int
+_EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
 
 
-@dataclass
-class User:
-    """Represents a registered member of the library system."""
+@dataclass(frozen=True)
+class Email:
+    value: str
 
-    username: str
-    email: str
-    id: UserID | None = None
-
-
-@dataclass
-class Book:
-    """Represents a physical or digital book in the collection."""
-
-    title: str
-    author: str
-    is_available: bool = True
-    id: BookID | None = None
-
-
-@dataclass
-class Loan:
-    """Represents the historical or active record of a book lent to a user."""
-
-    user_id: int
-    book_id: int
-    loan_date: date
-    return_date: Optional[date] = None
-    id: LoanID | None = None
+    def __post_init__(self):
+        if not _EMAIL_RE.match(self.value):
+            raise ValueError("Invalid email format")
+        object.__setattr__(self, "value", self.value.lower())
