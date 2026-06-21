@@ -1,6 +1,6 @@
 # library-api — Project Context for Pi
 
-> Abrí Pi desde `/home/heks/PROJECTS/library-api` para que los comandos y paths resuelvan correctamente.
+> Inicia Pi desde `/home/heks/PROJECTS/library-api` para que los comandos y paths resuelvan correctamente.
 
 ## Project identity
 
@@ -60,6 +60,7 @@ pyrightconfig.json    # typeCheckingMode: strict, includes: [src]
 - **Private attributes**: `_` prefix in implementation classes
 - **Duck typing guard**: `_: DbProtocol = InMemoryDatabase()` at module level
 - **Code and docstrings**: English
+- **Docs language**: neutral Spanish (castellano estándar). **ZERO voseo** — no usar conjugaciones del voseo (-ás, -és, -ís). Usa solo formas del castellano estándar: tienes, puedes, sabes, creas, usas.
 - **Casing**: `snake_case` for identifiers, `PascalCase` for classes
 - **Line length**: 88 (Ruff)
 - **Quote style**: double quotes

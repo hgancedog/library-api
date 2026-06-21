@@ -10,7 +10,7 @@
 
 Este documento es el **registro único** de todas las decisiones tomadas durante la
 reconstrucción de library-api aplicando TDD estricto desde cero. Cada decisión
-incluye su por qué. Incluye también un apéndice con la guía TDD paso a paso como
+incluye su por qué. Incluye también un [apéndice](#apéndice) con la guía TDD paso a paso como
 referencia práctica.
 
 No solo se documenta el TDD: se documenta cada elección de herramienta, estructura,
@@ -120,7 +120,7 @@ pip install -e ".[dev]"
 | Parte | Significado |
 |---|---|
 | `pip install` | Instala paquetes Python |
-| `-e` | Modo **editable** (development mode). El código en `src/` se vincula sin copiarse. Los cambios en el código fuente se reflejan inmediatamente al importar, sin reinstalar. |
+| `-e` | Modo **editable** (development mode). Instala un archivo `.pth` en `site-packages` que apunta a `src/`. Python lo lee al arrancar y añade esa ruta a `sys.path`. Los cambios en el código fuente se reflejan al instante al importar, sin reinstalar. **No es un symlink.** |
 | `.` | Instala el paquete del directorio actual (library-api, definido en `pyproject.toml`) |
 | `[dev]` | Instala también las dependencias opcionales del grupo `dev` (pytest, ruff, pre-commit) |
 
@@ -336,7 +336,7 @@ test_<entidad>_<comportamiento_esperado>
 | `test_book_requires_title` | Book | Necesita título — lo prueba con título vacío (negativo) |
 | `test_cannot_loan_book_twice` | Book | Un libro prestado no se presta otra vez (negativo) |
 
-**Por qué:** al leer el nombre del test sabés qué comportamiento del dominio
+**Por qué:** al leer el nombre del test sabes qué comportamiento del dominio
 está probando sin abrir el código. Si el test falla, el nombre dice qué regla
 se rompió.
 
@@ -447,13 +447,6 @@ src/
   `email.value` tras la creación). Un VO debe ser inmutable por definición:
   dos `Email` con el mismo valor son intercambiables, y si alguien muta uno,
   esa garantía se rompe.
-
-  **Detalle técnico:** `frozen=True` bloquea incluso la asignación dentro de
-  `__post_init__`. Si necesitás modificar un campo durante la inicialización
-  (por ejemplo, para normalizar a minúsculas), usás:
-  `object.__setattr__(self, "value", self.value.lower())`.
-  Esto llama al `__setattr__` de la clase base `object`, saltando el bloqueo
-  que impone la dataclass congelada.
 - `__eq__` automático: dos instancias con el mismo `value` son `==` sin
   escribir comparadores.
 - `__repr__` automático: `Email(value='user@example.com')` en vez del
@@ -496,8 +489,8 @@ import dataclass` (nombre único) para el decorador.
 
 | Situación | Forma |
 |---|---|
-| Usás una sola cosa del módulo | `from X import Y` |
-| Usás varias cosas o el nombre solo es ambiguo | `import X` |
+| Usas una sola cosa del módulo | `from X import Y` |
+| Usas varias cosas o el nombre solo es ambiguo | `import X` |
 
 ### Decisión 2.9 — `assert` vs `pytest.raises`
 
@@ -539,10 +532,256 @@ def test_email_normalizes_to_lowercase():
 regex, lanzaría `ValueError` antes de llegar al `assert`, y el test fallaría
 con ese error. Un tercer test que solo verificara «se guarda un email en
 minúsculas» no probaría ningún camino de código nuevo. Dos tests (negativo
+
 - positivo) cubren los tres comportamientos sin redundancia.
+
+---
+
+## Sesión 3 — Entidad Book: excepciones y atributos
+
+> Fecha: 21 junio 2026
+
+Arranca la entidad `Book`. Antes de escribir el primer test, hay que resolver
+cuándo se crean las excepciones, con qué atributos nace `Book` y en qué orden
+se escriben los tests de creación.
+
+### Decisión 3.1 — `LibraryApiError` se crea ANTES del primer test de entidad
+
+**Qué:** `LibraryApiError` no nace de un test concreto. Se crea como paso previo,
+junto con `BookError` (su primera subclase), antes de ejecutar el test 2.1.
+
+**Por qué:** `LibraryApiError` es infraestructura compartida. El test 2.1 solo
+menciona `BookError`, pero `BookError(LibraryApiError)` no puede existir sin su
+padre. Son un bloque atómico: se crean juntos.
+
+La secuencia real del primer RED sería:
+
+| # | Error | Qué crear |
+|---|-------|------------|
+| 1 | `NameError: name 'BookError' is not defined` | `class LibraryApiError(Exception): pass` + `class BookError(LibraryApiError): pass` |
+| 2 | `NameError: name 'Book' is not defined` | `@dataclass class Book: ...` mínima |
+| 3 | `BookError no fue lanzada` | Añadir validación en `__post_init__` |
+
+Python busca `BookError` y, al no encontrarlo, falla en el paso 1. Pero al crear
+`BookError`, el intérprete intenta resolver `LibraryApiError` en la herencia. Si
+no existe, el error sería `NameError: name 'LibraryApiError' is not defined`.
+Por eso se crean **las dos a la vez**, en un solo paso de RED.
+
+> **Regla:** las excepciones de infraestructura (raíz de la jerarquía) se crean
+> antes del test que las usa. Las excepciones específicas (`BookNotFoundError`)
+> sí nacen de tests concretos (Paso 6.1).
+
+### Decisión 3.2 — Atributos de `Book`: solo los que los tests piden
+
+**Qué:** `Book` no nace con todos sus atributos definidos de antemano. Cada
+atributo aparece cuando un test lo exige. El constructor evoluciona así:
+
+```
+Book(title, author)                              ← tests 2.1 y 2.2
+Book(title, author, is_available=True)           ← test 3 (primer assert que nombra is_available)
+Book(title, author, is_available=True, id=None)  ← tests de repositorio (cuando existan)
+```
+
+**Por qué:** en TDD estricto, la forma de la entidad la deciden los tests, no un
+diseño previo. Cada campo se añade cuando hay un test que lo necesita:
+
+| Campo | ¿Cuándo aparece? | Test que lo fuerza |
+|---|---|---|
+| `title: str` | Test 2.1 | `test_book_requires_title` — necesita un título para validar |
+| `author: str` | Test 2.1 | El test usa `Book(title="", author="...")` — si `author` no existiera, el constructor fallaría |
+| `is_available: bool = True` | Test 3 | `assert book.is_available is True` es el primer lugar donde se nombra el campo |
+| `id: BookID \| None = None` | Tests de repositorio | El primer test que haga `assert book.id == 1` forzará a añadirlo |
+
+Esto no significa que no sepamos el diseño final. Lo conocemos. Pero dejamos que
+los tests **descubran** los atributos uno a uno, en vez de declararlos todos de
+golpe. La diferencia es sutil pero importante: si declaras todo junto, estás
+escribiendo código sin test. Si dejas que cada test añada lo que necesita, cada
+línea de producción tiene un test que la justifica.
+
+### Decisión 3.3 — Tests negativos antes que positivos (para entidades)
+
+**Qué:** todos los tests negativos de creación de una entidad van **antes** que
+el positivo. No se intercala negativo → positivo → negativo.
+
+**Por qué:**
+
+1. **Blindaje primero.** Los tests negativos son defensivos: protegen contra
+   estados inválidos. Tiene sentido construir las murallas antes de celebrar
+   que la casa se mantiene en pie.
+
+2. **El positivo no forzaría nueva lógica.** Si intercalas un test positivo entre
+   dos negativos, el positivo solo verifica comportamientos que ya existen — no
+   obliga a escribir código nuevo. Es un test que nace verde, y un test que nace
+   verde no aporta valor en TDD.
+
+3. **El orden natural del dominio.** Cuando creas un libro, primero te asegurás
+   de que no puede nacer roto (título vacío, autor vacío). Solo después confirmás
+   que con datos válidos se crea correctamente.
+
+```
+Test 2.1 — negativo: título vacío
+Test 2.2 — negativo: autor vacío
+Test 3   — positivo: creación exitosa (prueba is_available, title, author)
+```
+
+> **Esto aplica a ENTIDADES, no a Value Objects.** En los VO (Email) el orden fue
+> negativo → positivo porque solo hay un positivo. Con entidades, donde hay
+> múltiples negativos, se agrupan todos antes del positivo.
+
+### Decisión 3.4 — Type aliases solo para IDs, no para strings
+
+**Qué:** se usan type aliases para distinguir IDs de distintas entidades
+(`BookID = int`, `UserID = int`, `LoanID = int`). No se crean aliases para
+atributos de tipo `str` (`BookTitle`, `BookAuthor`).
+
+**Por qué:** un type alias en Python no crea un tipo nuevo — es un sinónimo.
+Pyright no distingue `BookTitle` de `str`: son el mismo tipo. Por tanto, un
+alias de string no previene errores:
+
+```python
+BookTitle = str
+BookAuthor = str
+
+book = Book(title=author_value, author=title_value)  # Pyright no se queja
+```
+
+Con IDs la situación es distinta. `int` se usa para muchas cosas (ids,
+contadores, edades, cantidades). Un alias documenta la intención:
+
+```python
+BookID = int
+UserID = int
+
+def get_book(book_id: BookID) -> Book: ...      # Sé que es un ID de libro
+def get_user(user_id: UserID) -> User: ...      # Sé que es un ID de usuario
+```
+
+`Email` no es un alias, es una **clase real** (`class Email`). Ahí sí hay
+distinción de tipos para Pyright, y por eso se justifica.
+
+**Regla:** alias solo cuando el mismo tipo base (`int`) tiene significados
+distintos en el dominio. Para `str`, el nombre del campo en el dataclass
+(`title: str`, `author: str`) ya documenta la intención.
+
+### Decisión 3.5 — Validación hardcodeada, no automática con `vars()` o `fields()`
+
+**Qué:** la validación de campos obligatorios en `__post_init__` se escribe
+explícitamente, campo por campo. No se usan bucles sobre `vars(self)` ni
+`fields(self)` para validar automáticamente todos los atributos.
+
+**Por qué:**
+
+1. **Un campo nuevo no debe validarse mágicamente.** Si añades `publisher: str`
+   mañana, con validación automática se validaría sin que ningún test lo pida.
+   Eso es código de producción sin test — viola TDD.
+
+2. **Los campos opcionales rompen la validación automática.**
+   `subtitle: str | None = None` o `notes: str = ""` dispararían `BookError`
+   porque `not None` es `True` y `not ""` es `True`. Necesitarías una lista de
+   excepciones, y eso ya es más complejo que la lista explícita.
+
+3. **Trazabilidad TDD.** Cada campo obligatorio tiene su test negativo:
+
+   ```
+   test_book_requires_title  → if not self.title
+   test_book_requires_author → if not self.author
+   ```
+
+   Con validación automática, un solo test cubriría varios campos. Si falla,
+   no sabes cuál se rompió. Si alguien borra la validación por accidente,
+   ningún test lo detecta porque nunca escribiste un test dedicado a ese campo.
+
+4. **Código aburrido > código elegante.** Dos `if not` son más fáciles de leer
+   y depurar que un bucle con `isinstance` y `getattr`. En TDD la prioridad es
+   la seguridad, no la brevedad.
+
+**Qué NO hacer:**
+
+```python
+# ❌ Validación automática — mágica, frágil con opcionales, sin trazabilidad
+def __post_init__(self):
+    for name, value in vars(self).items():
+        if isinstance(value, str) and (not value or not value.strip()):
+            raise BookError(f"Book must have {name}")
+```
+
+**Qué SÍ hacer:**
+
+```python
+# ✅ Validación explícita — aburrida, segura, trazable
+def __post_init__(self):
+    if not self.title or not self.title.strip():
+        raise BookError("Book must have a title")
+    if not self.author or not self.author.strip():
+        raise BookError("Book must have an author")
+```
+
+> **Señal de refactor:** cuando los `if not` repetidos duelan (5+ campos),
+> extraer a una lista `_REQUIRED = ["title", "author", ...]` con un bucle.
+> Pero solo cuando duela, no antes. Los tests existentes protegen el cambio.
+
+### Decisión 3.6 — Un assert por atributo en el test positivo
+
+**Qué:** el test positivo de creación (`test_book_created_with_valid_data`)
+tiene un `assert` independiente por cada atributo de la entidad. No se agrupan
+en un solo assert genérico.
+
+**Por qué:**
+
+1. **Cada assert es un satélite de triangulación.** Si `assert book.title`
+   falla, sabes exactamente qué campo no se asignó. Si usas un solo assert
+   masivo y falla, no sabes cuál de los 4 campos es el culpable.
+
+2. **Fuerza la existencia de cada campo.** El test positivo es el primer lugar
+   donde `is_available` aparece nombrado. El assert `book.is_available is True`
+   es lo que fuerza a añadir ese campo al dataclass — no aparece en los tests
+   negativos.
+
+3. **Documenta la forma completa de la entidad.** Leyendo el test positivo,
+   sabes todos los atributos que tiene `Book` sin abrir `models.py`.
+
+**El test completo:**
+
+```python
+def test_book_created_with_valid_data():
+    book = Book(title="The Odyssey", author="Homer")
+    assert book.title == "The Odyssey"
+    assert book.author == "Homer"
+    assert book.is_available is True
+```
+
+> **Importante:** `is_available` no existe aún en `Book`. Este test, en su
+> fase RED, fallará con `AttributeError: 'Book' object has no attribute
+> 'is_available'`. Ese rojo es el que fuerza a añadir el campo con default
+> `True` al dataclass.
+
+### Decisión 3.7 — Fases de aprendizaje TDD: de la creación al comportamiento
+
+**Qué:** las entidades se construyen en fases progresivas. Cada fase responde
+a una categoría distinta de preguntas sobre el dominio y enseña un patrón
+de test diferente.
+
+| Fase | Qué aprendés | Pregunta del dominio |
+|------|-------------|---------------------|
+| VO | Validar un dato aislado | ¿Este dato es correcto por sí mismo? |
+| Creación | La entidad no puede nacer rota | ¿Qué campos son obligatorios? |
+| Comportamiento | Métodos que consultan estado | ¿Qué me puede decir el objeto sobre sí mismo? |
+| Transiciones | Métodos que cambian estado | ¿Qué acciones cambian el objeto? |
+| Límites | Operaciones ilegales | ¿Qué no debería permitirse nunca? |
+| Persistencia | Guardar y recuperar | ¿Cómo sobrevive el objeto entre ejecuciones? |
+| Orquestación | Coordinar entidades | ¿Cómo interactúan varias entidades entre sí? |
+
+> **Momento actual:** completamos Creación (Pasos 2 y 3). Entramos en
+> **Comportamiento (Paso 4):** métodos que consultan el estado del objeto
+> sin cambiarlo. Las preguntas concretas para descubrir métodos están en el
+> [apéndice](#apéndice), Pasos 4 y 5.
 
 > Esta sección es la referencia práctica. Leela cuando vayas a escribir código.
 > Las decisiones de arriba explican el porqué de cada regla; aquí está el cómo.
+
+## Apéndice
+
+Guía TDD paso a paso — referencia práctica.
 
 ### Reglas antes de empezar
 
@@ -753,6 +992,12 @@ def test_email_stores_valid_value():
 
 **Objetivo:** la entidad rechaza su creación si faltan piezas fundamentales.
 
+> **Orden:** todos los tests negativos de creación van **antes** del positivo.
+> Primero blindas la entidad contra estados inválidos (2.1 título, 2.2 autor).
+> Luego confirmas que con datos válidos se crea correctamente (Paso 3). Si
+> intercalas positivo entre negativos, estás escribiendo un test que no fuerza
+> nueva lógica — el positivo solo prueba comportamientos que ya existen.
+
 #### 2.1 — Test negativo: título vacío
 
 ```python
@@ -794,7 +1039,15 @@ def test_book_requires_author():
         Book(title="Dune", author="")
 ```
 
-**GREEN:** añadir validación en `__post_init__`.
+**GREEN:** añadir validación de autor en `__post_init__`:
+
+```python
+def __post_init__(self):
+    if not self.title or not self.title.strip():
+        raise BookError("Book must have a title")
+    if not self.author or not self.author.strip():
+        raise BookError("Book must have an author")
+```
 
 ### Paso 3 — Entidad: test positivo (creación exitosa)
 
@@ -809,6 +1062,13 @@ def test_book_created_with_valid_data():
 💡 **Triangulación:** prueba con otro libro (`Book("Foundation", "Asimov")`).
 
 ### Paso 4 — Entidad: comportamiento (métodos)
+
+**Cómo descubrir métodos:** hazte preguntas de sentido común sobre el dominio.
+Para esta fase, solo preguntas que **consultan** estado (no lo cambian):
+
+| Pregunta | Respuesta | Método |
+|----------|-----------|--------|
+| ¿Este libro está disponible? | Sí, si no está prestado | `can_be_loaned() → bool` |
 
 > ⚠️ **No hagas tests que solo verifican «se ejecuta sin errores».**
 > Todo test necesita un `assert` o un `pytest.raises`.
@@ -829,7 +1089,49 @@ def can_be_loaned(self) -> bool:
     return self.is_available
 ```
 
+#### ¿Por qué un método y no usar el campo directamente?
+
+`can_be_loaned()` es la interfaz pública. Nadie debería hacer
+`if book.is_available` — debería preguntar `if book.can_be_loaned()`.
+Es **encapsulación**: el campo es implementación interna, el método es
+el contrato público.
+
+| Test | Qué prueba | Nivel |
+|------|-----------|-------|
+| Test 3 | `assert book.is_available is True` | **Estado interno** — el campo |
+| Test 4 | `assert book.can_be_loaned() is True` | **API pública** — el método |
+
+Hoy `can_be_loaned()` solo devuelve `self.is_available`, pero mañana
+podría incluir más reglas: «está disponible si no está prestado Y tiene
+ISBN válido Y no está en restauración».
+
+**Caso concreto — añadir ISBN como requisito:**
+
+```python
+# Sin método — la regla vive en cada consumidor
+if book.is_available:                     # ❌ no sabe nada del ISBN
+
+# Con método — la regla vive en UN lugar
+def can_be_loaned(self) -> bool:
+    return self.is_available and self.isbn is not None  # ← único cambio
+```
+
+Si el código externo usa `is_available` a pelo, al añadir ISBN tienes que
+cambiarlo en cada sitio. Si usa `can_be_loaned()`, cambias un método y
+todo sigue funcionando.
+
+Es la misma razón por la que no accedes a `email._value` sino a
+`email.value`: el método expone el contrato público, el campo es detalle
+interno.
+
 ### Paso 5 — Entidad: estados (transiciones)
+
+**Cómo descubrir métodos:** ahora preguntas que **cambian** el estado del objeto:
+
+| Pregunta | Respuesta | Método |
+|----------|-----------|--------|
+| ¿Qué pasa cuando se presta? | Deja de estar disponible | `loan()` → `is_available = False` |
+| ¿Se puede devolver? | Sí, vuelve a estar disponible | `return_book()` → `is_available = True` |
 
 ```python
 def test_loaning_book_marks_it_unavailable():
@@ -946,7 +1248,7 @@ en `__post_init__`.
    independiente evita ese problema.
 
 3. **El tipo documenta la intención → VO.** `def register(email: Email)` dice
-   más que `def register(email: str)`. El type checker detecta si pasás un string
+   más que `def register(email: str)`. El type checker detecta si pasas un string
    crudo sin validar.
 
 4. **Testabilidad aislada.** Probar `Email` requiere 2 tests y cero dependencias.
