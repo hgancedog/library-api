@@ -14,6 +14,14 @@ repos:
         types: [python]
         pass_filenames: false
 
+      - id: check-language
+        name: Check language consistency
+        entry: check-language
+        language: system
+        types_or: [markdown, text]
+        files: "^project_docs/"
+        stages: [pre-commit]
+
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.0
     hooks:
