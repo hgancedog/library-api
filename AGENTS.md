@@ -16,8 +16,8 @@
 
 ```bash
 # Tests
-pytest src/app/tests/ -v
-pytest src/app/tests/ -v --cov=src/app --cov-report=term-missing
+pytest src/tests/ -v
+pytest src/tests/ -v --cov=src/app --cov-report=term-missing
 
 # Lint + format
 ruff check src/
@@ -37,16 +37,14 @@ ruff check src/ && ruff format src/ && pyright
 ```
 src/
   app/
-    models.py           # dataclass domain models + type aliases
-    exceptions.py       # exception hierarchy
-    protocols.py        # DbProtocol (typing.Protocol)
-    in_memory_database.py  # InMemoryDatabase — implements DbProtocol
-    library_service.py  # LibraryService — pure business logic, no DB import
-    main.py             # manual smoke runner (temporary)
-    tests/              # ← must be created; empty for now
+    models.py           # dataclass domain models + type aliases (TDD-driven)
+  tests/
+    test_email.py       # Email VO tests
 openspec/
   config.yaml         # SDD project config — source of truth for Pi phases
 project_docs/
+  design-notes/
+    01-tdd-desde-cero.md  # decision journal + TDD guide
   ROADMAP_FINAL_2026.md
 pyproject.toml
 pyrightconfig.json    # typeCheckingMode: strict, includes: [src]
@@ -110,6 +108,7 @@ This file is your complete context for **current stage work**. Do not load addit
 ### When stages change
 
 If a stage is **added, removed, or modified**, update all three files — never just one:
+
 1. `project_docs/ROADMAP_FINAL_2026.md` — full detail, source of truth
 2. `project_docs/stage_summaries.md` — compact map and per-stage card
 3. `AGENTS.md` — this file, if current stage identity, branch, or goal changed
