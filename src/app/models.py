@@ -34,3 +34,6 @@ class Book:
             raise BookError("Book must have a title")
         if not self.author or not self.author.strip():
             raise BookError("Book must have an author")
+
+    def can_be_loaned(self) -> bool:
+        return self.is_available

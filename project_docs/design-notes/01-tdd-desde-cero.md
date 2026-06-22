@@ -1124,6 +1124,35 @@ Es la misma razón por la que no accedes a `email._value` sino a
 `email.value`: el método expone el contrato público, el campo es detalle
 interno.
 
+#### ¿Por qué `can_be_loaned()` no lleva `pytest.raises`?
+
+`can_be_loaned()` es una **pregunta** (query), no una **acción** (command).
+Preguntar «¿está disponible?» siempre tiene respuesta válida: `True` o
+`False`. No hay caso donde la pregunta misma sea ilegal.
+
+```python
+# Pregunta — nunca falla
+assert book.can_be_loaned() is True   # ✅ respuesta válida
+assert book.can_be_loaned() is False  # ✅ también respuesta válida
+```
+
+La excepción va en la **acción**, que es `loan()` (Paso 5). Intentar
+prestar un libro ya prestado sí es ilegal:
+
+```python
+# Acción — puede fallar
+with pytest.raises(BookAlreadyLoanedError):   # ✅ excepción aquí
+    book.loan()
+```
+
+| Método | Tipo | ¿Excepción? |
+|--------|------|-------------|
+| `can_be_loaned()` | Pregunta (query) | Nunca |
+| `loan()` | Acción (command) | `BookAlreadyLoanedError` si ya está prestado |
+
+Esto es el principio **Command-Query Separation**: quien pregunta no
+falla; quien actúa, sí puede fallar.
+
 ### Paso 5 — Entidad: estados (transiciones)
 
 **Cómo descubrir métodos:** ahora preguntas que **cambian** el estado del objeto:
