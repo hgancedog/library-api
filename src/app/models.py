@@ -10,6 +10,10 @@ class BookError(LibraryApiError):
     """Raised for general book-related failures."""
 
 
+class UserError(LibraryApiError):
+    """Raised for general user-related failures."""
+
+
 _EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
 
 
@@ -37,3 +41,13 @@ class Book:
 
     def can_be_loaned(self) -> bool:
         return self.is_available
+
+
+@dataclass
+class User:
+    username: str
+    email: Email
+
+    def __post_init__(self):
+        if not self.username or not self.username.strip():
+            raise UserError("User must have an username")

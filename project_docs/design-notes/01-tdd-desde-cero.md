@@ -925,10 +925,16 @@ git commit
 git push
   └─→ .git/hooks/pre-push
        └─→ pre-commit framework
-            └─→ lee .pre-commit-config.yaml
-                 └─→ ejecuta hooks con stages: [pre-push]
-                      └── check-tests  → scripts/check_tests.py
+            └─→ ejecuta hooks commit-stage + push-stage:
+                 ├── pyright          (pre-commit, re-verifica)
+                 ├── ruff             (pre-commit, re-verifica)
+                 ├── ruff-format      (pre-commit, re-verifica)
+                 └── check-tests      (pre-push)  → scripts/check_tests.py
 ```
+
+> **Comportamiento de pre-commit:** `pre-push` ejecuta tanto los hooks de
+> `pre-commit` como los de `pre-push`. No es un bug — es una ventaja:
+> el push re-verifica tipado y linting por si algo se coló entre commit y push.
 
 ### Por qué un hook y no una extensión de Pi
 
@@ -1173,6 +1179,51 @@ def test_email_stores_valid_value():
 > Luego confirmas que con datos válidos se crea correctamente (Paso 3). Si
 > intercalas positivo entre negativos, estás escribiendo un test que no fuerza
 > nueva lógica — el positivo solo prueba comportamientos que ya existen.
+
+#### ¿Cuándo escribir un test negativo dedicado?
+
+No todo atributo necesita test negativo. La regla la da el sistema de
+**detección temprana** — quién atrapa el error primero:
+
+| Atributo | Tipo | Valor inválido | ¿Instancia del tipo? | ¿Quién lo atrapa? | ¿Test negativo? |
+|---|---|---|---|---|---|
+| `Book.title` | `str` | `""` | ✅ Sí — `""` es `str` | **Runtime** (`__post_init__`) | ✅ Necesario |
+| `User.username` | `str` | `""` | ✅ Sí — `""` es `str` | **Runtime** (`__post_init__`) | ✅ Necesario |
+| `User.email` | `Email` | `"no soy email"` | ❌ No — `str` no es `Email` | **Pyright** (type checker) | ❌ No necesario |
+| `Book.author` | `str` | `""` | ✅ Sí — `""` es `str` | **Runtime** (`__post_init__`) | ✅ Necesario |
+
+> **Regla:** si el valor inválido **engaña al type checker** (ej: `""` es un
+> `str` válido para Python pero inválido para el dominio), necesitas un test
+> negativo. Si el type checker lo rechaza en tiempo de análisis (ej: pasar
+> `str` donde se espera `Email`), el tipo ya es tu test.
+>
+> **Ejemplo concreto:** `User` no tiene test negativo de email. Si alguien
+> intenta `User(username="john", email="bad")`, Pyright marca error antes de
+> que pytest corra. Si alguien borra el campo `email` del modelo, el test
+> positivo `test_user_created_with_valid_data` truena con `AttributeError`
+> al hacer `user.email`. El campo se verifica **por uso**, no por test dedicado.
+
+#### ¿Cuándo normalizar un campo en `__post_init__`?
+
+No todo `str` debe bajarse a lowercase. La decisión depende de si existe
+un **estándar externo** que defina la equivalencia:
+
+| Campo | ¿Normalizar? | ¿Por qué? |
+|---|---|---|
+| `Email.value` | ✅ Sí | RFC 5321: `User@Example.com` y `user@example.com` son la misma dirección. No normalizar es incorrecto. |
+| `User.username` | ❌ No | No hay estándar. `JohnDoe` y `johndoe` pueden ser el mismo usuario o dos distintos — es decisión de producto, no técnica. |
+
+La case-sensitivity se resuelve en la **capa correcta**, no en el modelo:
+
+| Capa | ¿Dónde? | ¿Cuándo? |
+|---|---|---|
+| Dominio | `User.username` guarda lo que el usuario escribió | Ahora (Stage 1) |
+| Persistencia | `UNIQUE COLLATE NOCASE` en SQLite | Stage 2 |
+| Búsqueda | `repo.find_by_username()` compara case-insensitive | Stage 1 (Repository) |
+
+> **Regla:** el modelo preserva lo que el usuario escribió. La comparación y
+> unicidad se delegan a la capa que sabe del storage. No mezclar capas en
+> `__post_init__` solo porque "algún día habrá base de datos".
 
 #### 2.1 — Test negativo: título vacío
 
