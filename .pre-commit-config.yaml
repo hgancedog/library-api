@@ -14,6 +14,13 @@ repos:
         types: [python]
         pass_filenames: false
 
+      - id: check-tests
+        name: Check tests staged with production code
+        entry: python scripts/check_tests.py
+        language: system
+        stages: [pre-push]
+        pass_filenames: false
+
       - id: check-language
         name: Check language consistency
         entry: check-language

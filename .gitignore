@@ -36,3 +36,5 @@ ENV/
 # Personal learning docs
 project_docs/git-commands.md
 project_docs/python-theory.md
+project_docs/pi-gentle-explained.md
+project_docs/config-map.md

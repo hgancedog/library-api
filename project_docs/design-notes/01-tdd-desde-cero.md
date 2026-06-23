@@ -771,13 +771,180 @@ de test diferente.
 | Persistencia | Guardar y recuperar | ¿Cómo sobrevive el objeto entre ejecuciones? |
 | Orquestación | Coordinar entidades | ¿Cómo interactúan varias entidades entre sí? |
 
-> **Momento actual:** completamos Creación (Pasos 2 y 3). Entramos en
-> **Comportamiento (Paso 4):** métodos que consultan el estado del objeto
-> sin cambiarlo. Las preguntas concretas para descubrir métodos están en el
-> [apéndice](#apéndice), Pasos 4 y 5.
+> **Momento actual:** completamos Creación de Book (Pasos 2 y 3) y el primer
+> query de Comportamiento (`can_be_loaned()`, Paso 4). Queda pendiente:
+> **completar Creación de User y Loan** antes de seguir con más Comportamiento.
+
+---
+
+## Patrones y principios descubiertos
+
+> Los patrones no se estudian de antemano. Emergen de los tests y se
+> documentan cuando se reconocen. Esta sección crece con el proyecto.
+
+| Patrón / Principio | Fuente | Dónde aparece | Qué resuelve |
+|---|---|---|---|
+| **Value Object** | DDD (Eric Evans) | `Email` | Objeto sin identidad, inmutable, igualdad por valor |
+| **Entity** | DDD (Eric Evans) | `Book` | Objeto con identidad (ID futuro), muta estado |
+| **CQS** | Bertrand Meyer | `can_be_loaned()` vs `loan()` | Las preguntas nunca fallan; las acciones sí pueden |
+| **Encapsulación** | OOP | `can_be_loaned()` oculta `is_available` | El campo es interno, el método es contrato público |
+| **Guard Clause** | Refactoring (Fowler) | `if not self.title: raise BookError(...)` | Rechazar estados inválidos al entrar, no al final |
+| **Exception Hierarchy** | Decisión de diseño | `LibraryApiError → BookError → BookAlreadyLoanedError` | Atrapar por nivel de especificidad sin enumerar excepciones |
+
+> **Distinción importante:** OOP da la sintaxis (clases, herencia). DDD da el
+> significado (¿esto se identifica por valor o por ID?). Value Object y Entity
+> no son conceptos de OOP — nacen del diseño guiado por el dominio.
 
 > Esta sección es la referencia práctica. Leela cuando vayas a escribir código.
 > Las decisiones de arriba explican el porqué de cada regla; aquí está el cómo.
+
+---
+
+## Decisión de infraestructura — Hook pre-push `check-tests`
+
+### Contexto
+
+El TDD tiene reglas que requieren criterio humano (triangulación, refactor,
+orden RED→GREEN) y una regla que es puramente mecánica: **si cambias código de
+producción, deben cambiar tests.**
+
+Las skills de Gentle-Pi (`work-unit-commits`, `gentle-ai`) son pasivas:
+dependen de que el agente recuerde aplicarlas. En sesiones largas, las
+instrucciones del system prompt se diluyen y el agente puede commitear código
+de producción sin tests. El análisis completo de este problema está en
+`project_docs/config-map.md`, sección "Por qué falla la aplicación de reglas".
+
+### Decisión
+
+**Crear un hook de pre-push (`check-tests`) que bloquee el push cuando hay
+cambios en `src/app/` sin cambios correspondientes en `src/tests/`.**
+
+El hook se ejecuta en `pre-push`, no en `pre-commit`, para no mezclar capas
+de enforcement: tipado y formato son corrección inmediata (no deberías ni
+committear sin ellos); la presencia de tests es disciplina de entrega (se
+verifica al empujar). Si el hook da un falso positivo (cambio cosmético),
+`--no-verify` en push no sacrifica `pyright` ni `ruff`.
+
+### Las tres preguntas que llevaron a esta decisión
+
+| Pregunta | Respuesta |
+|---|---|
+| ¿Hooks en vez de extensiones para Python? | **Sí.** Las extensiones de Pi son TypeScript. Un proyecto Python no debería depender de una pila TS para enforcement de git. |
+| ¿Un hook para work-unit-commits? | **Sí.** Es la única regla del TDD que se puede codificar sin criterio humano. Las demás (triangulación, refactor, orden RED→GREEN) requieren juicio — para eso está el Gentleman. |
+| ¿En pre-commit o pre-push? | **Pre-push.** Tipado y formato (pyright, ruff) deben bloquear el commit. La disciplina de tests se verifica al empujar. Separar capas evita que un falso positivo del hook de tests te obligue a saltarte también pyright. |
+
+### Qué se creó
+
+| Archivo | Rol |
+|---|---|
+| `scripts/check_tests.py` | Script Python que implementa la regla binaria: cambios en `src/app/` → cambios en `src/tests/` requeridos. |
+| `.pre-commit-config.yaml` | Nuevo hook `check-tests` con `stages: [pre-push]`. |
+
+### Comportamiento verificado
+
+| Escenario | Resultado |
+|---|---|
+| Sin cambios en producción | ✅ Pass (skip) |
+| Producción sin tests | ❌ Bloquea — mensaje claro con los archivos ofensores |
+| Producción + tests | ✅ Pass |
+
+### Lo que el hook NO verifica — y por qué es deliberado
+
+El hook es binario y opera a nivel de **archivos**, no de métodos o líneas.
+No casa `models.py` con `test_book.py` — solo comprueba que haya al menos
+un archivo en `src/tests/` si hay al menos uno en `src/app/`.
+
+**No verifica:**
+
+| No verifica… | Porque… |
+|---|---|
+| Que el test corresponde al método cambiado | Requiere entender el código — criterio humano |
+| Que hay un test por cada función o clase nueva | Ídem |
+| Cobertura de líneas o ramas | Herramienta aparte: `pytest --cov` |
+| Que el test realmente prueba el cambio | Podrías stagiir un test vacío y pasaría — el Gentleman debe revisarlo |
+| Que los tests pasan | Eso lo garantizan `pyright` + `pytest`, hooks independientes |
+
+**Ejemplo concreto** que aclara la granularidad:
+
+```
+Cambias models.py para añadir User entity.
+Stageas src/app/models.py + src/tests/test_user.py
+
+✅ El hook pasa. No le importa que test_book.py no esté staged.
+   Solo mira: ¿hay algo en src/app/? ¿Hay algo en src/tests/? → Sí a ambas.
+```
+
+El hook es deliberadamente tonto. Un hook más fino (parsear el diff para
+detectar qué cambió, mantener un mapa de archivos, distinguir cambios
+cosméticos de cambios de comportamiento) sería frágil y se rompería con
+cada refactor. La granularidad fina la da el criterio del Gentleman durante
+la sesión.
+
+### El flag `--no-verify` — válvula de escape, no atajo
+
+`git push --no-verify` **bypassea el hook `check-tests`**, pero no afecta
+a los hooks de `pre-commit` (pyright, ruff, check-language) porque se
+ejecutan en stages distintos.
+
+**Casos legítimos:**
+
+| Escenario | ¿Legítimo? | Por qué |
+|---|---|---|
+| Cambiaste un docstring/typo en `models.py`, sin tests necesarios | ✅ Sí | Falso positivo del hook — no hay comportamiento que testear |
+| Arreglaste un comentario, Pyright y Ruff ya pasaron en el commit | ✅ Sí | La corrección ya está verificada |
+| Te saltas `check-tests` porque no escribiste tests | ❌ No | Estás violando TDD — el hook está funcionando exactamente como debe |
+
+> **Regla:** `--no-verify` existe para cuando el **hook se equivoca**, no para
+> cuando **tú te equivocas**. Separar `check-tests` en `pre-push` hace que
+> este bypass no sacrifique `pyright` ni `ruff` — solo afecta al hook de tests.
+
+### La foto completa de los hooks, sin ambigüedad
+
+| Componente | Ubicación | Qué es |
+|---|---|---|
+| Configuración de hooks | `library-api/.pre-commit-config.yaml` | **Un solo archivo.** Define 7 hooks, algunos en `pre-commit`, uno en `pre-push` |
+| Script `pre-commit` | `.git/hooks/pre-commit` | Generado por `pre-commit install`. Delega al framework |
+| Script `pre-push` | `.git/hooks/pre-push` | Generado por `pre-commit install --hook-type pre-push`. Ídem |
+| `check-language` | `/home/heks/.local/bin/check-language` | Script Python independiente, en el PATH del sistema, llamado por el hook |
+| `check-tests` | `scripts/check_tests.py` | Script Python del proyecto, llamado por el hook |
+
+**Flujo real:**
+
+```
+git commit
+  └─→ .git/hooks/pre-commit
+       └─→ pre-commit framework
+            └─→ lee .pre-commit-config.yaml
+                 └─→ ejecuta hooks con stages: [pre-commit]
+                      ├── check-venv
+                      ├── pyright
+                      ├── check-language  → /home/heks/.local/bin/check-language
+                      ├── ruff
+                      └── ruff-format
+
+git push
+  └─→ .git/hooks/pre-push
+       └─→ pre-commit framework
+            └─→ lee .pre-commit-config.yaml
+                 └─→ ejecuta hooks con stages: [pre-push]
+                      └── check-tests  → scripts/check_tests.py
+```
+
+### Por qué un hook y no una extensión de Pi
+
+- **Extensión de Pi:** código TypeScript que intercepta tool calls del agente.
+  Para un proyecto Python, añadir una pila TS solo para validar commits es
+  atacar el problema en la capa equivocada.
+- **Hook de pre-commit:** código que se ejecuta en git, independiente del
+  agente. Es inmune a la dilución de prompt y a la amnesia post-compaction.
+  No depende de que el Gentleman "recuerde" nada — git lo ejecuta siempre.
+
+> **Regla general:** si la validación es sobre un `git commit`, el enforcement
+> vive en git hooks. Si la validación es sobre el comportamiento del agente
+> (qué herramientas usa, qué lee antes de actuar), ahí sí es extensión de Pi.
+> No mezclar capas.
+
+---
 
 ## Apéndice
 
@@ -939,15 +1106,24 @@ de una decisión de diseño. Se crea antes del primer test de entidad.
 
 ### Orden de trabajo
 
-| Orden | Qué construyes | Tipo de tests | Patrón |
-|---|---|---|---|
-| 1º | Value Objects (Email) | Negativos + Positivos | `pytest.raises` + `assert vo.atributo == valor` |
-| 2º | Entidad — Creación segura | Negativos | `pytest.raises(EntidadError)` |
-| 3º | Entidad — Creación exitosa | Positivos | `assert entidad.atributo == valor` |
-| 4º | Entidad — Comportamiento | Positivos | `assert entidad.metodo() == esperado` |
-| 5º | Entidad — Estados | Positivos | `assert entidad.estado is True/False` |
-| 6º | Entidad — Casos límite | Negativos | `pytest.raises(EntidadError)` |
-| 7º | Revisión de diseño (manual) | — | ¿El código toca la BD? ¿Sabe de fechas? |
+> **Regla:** completa cada fase para **todas** las entidades antes de pasar a la
+> siguiente. No avances de Creación a Comportamiento hasta que todas las entidades
+> (Book, User, Loan) sepan nacer correctamente.
+>
+> **Por qué:** las fases avanzadas dependen de entidades que aún no existen.
+> No puedes testear `loan()` (Estados) sin User. No puedes testear casos límite
+> de Loan sin Book y User. La creación completa del dominio es el prerequisito
+> de todo lo demás.
+
+| Orden | Fase | Qué construyes | Tipo de tests | Patrón |
+|---|---|---|---|---|
+| 1º | VO | Value Objects (Email) | Negativos + Positivos | `pytest.raises` + `assert vo.atributo == valor` |
+| 2º | Creación (−) | **Todas las entidades** — no pueden nacer rotas | Negativos | `pytest.raises(EntidadError)` |
+| 3º | Creación (+) | **Todas las entidades** — creación exitosa | Positivos | `assert entidad.atributo == valor` |
+| 4º | Comportamiento | **Todas las entidades** — métodos que consultan estado | Positivos | `assert entidad.metodo() == esperado` |
+| 5º | Estados | Entidad — transiciones que mutan estado | Positivos | `assert entidad.estado is True/False` |
+| 6º | Casos límite | Entidad — blindaje contra operaciones ilegales | Negativos | `pytest.raises(EntidadError)` |
+| 7º | Revisión de diseño | Manual, sin test | — | ¿El código toca la BD? ¿Sabe de fechas? |
 
 ### Paso 1 — Value Objects (datos pequeños)
 
