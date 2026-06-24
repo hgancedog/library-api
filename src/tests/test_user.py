@@ -12,9 +12,3 @@ def test_user_created_with_valid_data():
     user = User("hector", Email("hector@gmail.com"))
     assert user.username == "hector"
     assert user.email.value == "hector@gmail.com"
-
-
-def test_user_created_with_other_valid_data():
-    user = User(username="jdoe", email=Email("john@example.com"))
-    assert user.username == "jdoe"
-    assert user.email.value == "john@example.com"

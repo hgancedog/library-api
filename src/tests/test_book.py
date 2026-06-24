@@ -20,13 +20,6 @@ def test_book_created_with_valid_data():
     assert book.is_available is True
 
 
-def test_book_created_with_other_valid_data():
-    book = Book(title="Foundation", author="Asimov")
-    assert book.title == "Foundation"
-    assert book.author == "Asimov"
-    assert book.is_available is True
-
-
 def test_available_book_can_be_loaned():
     book = Book(title="Meditations", author="Marcus Aurelius")
     assert book.can_be_loaned() is True

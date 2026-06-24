@@ -1043,6 +1043,50 @@ def calculate_shipping(quantity):
 | El algoritmo es complejo y no ves el patrón de inmediato | Desde el primer test sabes exactamente la fórmula |
 | Quieres blindar una regla de negocio con casos límite | El código mínimo ya es obviamente genérico |
 | Dudas de si tu implementación es realmente general | El comportamiento es trivial (getter, asignación) |
+| Escribiste el constructor a mano (`def __init__`) | El constructor lo genera `@dataclass` — Python lo hace genérico por ti |
+
+#### Por qué `@dataclass` no necesita triangulación
+
+La triangulación existe para cazar **código escrito a mano que hace trampa**.
+El constructor de `@dataclass` no está escrito a mano — lo genera Python.
+
+```python
+# Constructor escrito a mano — PUEDES hacer trampa
+class BookManual:
+    def __init__(self, title, author):
+        self.title = "The Odyssey"    # hardcodeado, ignora el parámetro
+        self.author = author
+```
+
+El test con `BookManual("Dune", "Herbert")` pasa en GREEN aunque `title`
+se haya hardcodeado. Necesitas un segundo test con `"Foundation"` para
+exponer la trampa.
+
+```python
+# @dataclass — constructor GENERADO por Python
+@dataclass
+class Book:
+    title: str
+    author: str
+
+# Python genera esto automáticamente:
+# def __init__(self, title: str, author: str):
+#     self.title = title      # ← no hay espacio para hardcodear
+#     self.author = author
+```
+
+El código generado es **genérico por construcción**. No hay un `if` donde
+esconder un valor fijo. No hay un programador humano que pueda decidir
+"devuelvo `\"The Odyssey\"` siempre". Python pone `self.title = title` — punto.
+
+> **Regla:** triangulas código que escribes. No triangulas código que genera
+> Python. Es como testear `1 + 1 == 2` y luego "triangular" con `2 + 2 == 4` —
+> no estás probando tu código, estás probando el intérprete.
+
+> **Caso concreto de este proyecto:** `test_book_created_with_other_valid_data`
+> y `test_user_created_with_other_valid_data` se eliminaron porque triangulaban
+> constructores de `@dataclass`. El decorador genera `__init__` genérico — no hay
+> código tramposo que cazar. La triangulación con dataclass no triangula nada.
 
 No es necesario triangular absolutamente todo. Es una **herramienta para cuando dudas**,
 no un ritual obligatorio.
@@ -1168,7 +1212,8 @@ def test_email_stores_valid_value():
     assert email.value == "user@example.com"
 ```
 
-💡 **Triangulación:** prueba con otro email válido (`"otro@dominio.org"`). Si dudas, revisa la sección de triangulación más arriba.
+> **Sin triangulación:** el constructor de `@dataclass(frozen=True)` es
+> genérico por construcción. No hay código tramposo que cazar.
 
 ### Paso 2 — Entidad: tests negativos (la entidad no puede nacer rota)
 
@@ -1286,7 +1331,8 @@ def test_book_created_with_valid_data():
     assert book.is_available is True
 ```
 
-💡 **Triangulación:** prueba con otro libro (`Book("Foundation", "Asimov")`).
+> **Sin triangulación:** el constructor de `@dataclass` es genérico por
+> construcción. No hay código tramposo que cazar.
 
 ### Paso 4 — Entidad: comportamiento (métodos)
 
