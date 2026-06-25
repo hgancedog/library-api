@@ -1,5 +1,10 @@
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import date, timedelta
+
+BookID = int
+UserID = int
+LoanID = int
 
 
 class LibraryApiError(Exception):
@@ -12,6 +17,10 @@ class BookError(LibraryApiError):
 
 class UserError(LibraryApiError):
     """Raised for general user-related failures."""
+
+
+class LoanError(LibraryApiError):
+    """Raised for general loan-related failures."""
 
 
 _EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
@@ -32,6 +41,7 @@ class Book:
     title: str
     author: str
     is_available: bool = True
+    book_id: BookID | None = None
 
     def __post_init__(self):
         if not self.title or not self.title.strip():
@@ -51,3 +61,16 @@ class User:
     def __post_init__(self):
         if not self.username or not self.username.strip():
             raise UserError("User must have an username")
+
+
+@dataclass
+class Loan:
+    book_id: BookID
+    user_id: UserID
+    loan_date: date = field(default_factory=date.today)
+    return_date: date | None = None
+    loan_id: LoanID | None = None
+    due_date: date = field(init=False)
+
+    def __post_init__(self):
+        self.due_date = self.loan_date + timedelta(days=30)

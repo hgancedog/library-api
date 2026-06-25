@@ -771,9 +771,463 @@ de test diferente.
 | Persistencia | Guardar y recuperar | ¿Cómo sobrevive el objeto entre ejecuciones? |
 | Orquestación | Coordinar entidades | ¿Cómo interactúan varias entidades entre sí? |
 
-> **Momento actual:** completamos Creación de Book (Pasos 2 y 3) y el primer
-> query de Comportamiento (`can_be_loaned()`, Paso 4). Queda pendiente:
-> **completar Creación de User y Loan** antes de seguir con más Comportamiento.
+> **Momento actual:** Creación de Book y User completada. En curso: Sesión 4
+> — diseño de `Loan` (entidad asociativa) previo a la escritura de tests.
+
+---
+
+## Sesión 4 — Diseño de Loan (entidad asociativa)
+
+> Fecha: 24 junio 2026
+
+Antes de escribir el primer test, se resuelve el diseño completo de `Loan`:
+atributos, validaciones, y la decisión sobre si referenciar por objeto o por ID.
+
+### Decisión 4.1 — Loan referencia por ID, no por objeto
+
+**Qué:** `Loan` usa `book_id: BookID` y `user_id: UserID`, no referencias directas
+a `Book` y `User`.
+
+**Por qué:** Stage 1 es en memoria, pero Stage 2 introduce base de datos.
+Referenciar por ID desde el principio evita un refactor completo de `Loan` al
+llegar a SQLAlchemy. Los type aliases `BookID` y `UserID` ya están definidos
+(Decisión 3.4).
+
+**Efecto en Book y User:** necesitan un campo `id: int | None = None`. Este
+campo no requiere tests dedicados (ver apéndice, tabla de detección temprana):
+su existencia se verifica **por uso** cuando el primer test de `Loan` falle con
+`TypeError` al pasar `book_id=1` si `Book` no tiene `id`.
+
+### Decisión 4.2 — Atributos de Loan
+
+**Qué:** `Loan` nace con cinco atributos:
+
+| Atributo | Tipo | Default | Significado |
+|----------|------|---------|-------------|
+| `book_id` | `BookID` (`int`) | — | Qué libro se prestó |
+| `user_id` | `UserID` (`int`) | — | Quién lo pidió |
+| `loan_date` | `date` | `date.today()` | Fecha del préstamo |
+| `due_date` | `date` | `field(init=False)` → `loan_date + timedelta(days=30)` | Fecha límite de devolución |
+
+> ⚠️ **Actualizado en 4.4:** `due_date` pasó de ser parámetro explícito a
+> `field(init=False)` calculado automáticamente. Ver Decisión 4.4 para el
+> razonamiento completo.
+| `return_date` | `date \| None` | `None` | `None` = aún no devuelto |
+
+> **Nota sobre `loan_date` y `default_factory`:**
+>
+> El default de `loan_date` se escribe `field(default_factory=date.today)`, no
+> `= date.today()`. La diferencia:
+>
+> ```python
+> # ❌ = date.today() — se evalúa UNA vez, al definir la clase
+> loan_date: date = date.today()
+> # Todas las instancias comparten la misma fecha (cuando se importó models.py)
+>
+> # ✅ default_factory=date.today — se evalúa al crear CADA instancia
+> loan_date: date = field(default_factory=date.today)
+> # Cada préstamo tiene la fecha del día en que realmente se creó
+> ```
+>
+> Sin `default_factory`, la fecha queda congelada al momento de importar el
+> módulo — todos los préstamos tendrían la misma fecha. Con `default_factory`,
+> Python llama a `date.today()` cada vez que se instancia `Loan`.
+
+**Por qué cada atributo:**
+
+- `book_id` y `user_id` son la conexión mínima para una entidad asociativa.
+- `loan_date` con default `date.today()` refleja que un préstamo siempre
+  empieza «ahora». El servicio puede sobrescribirlo si necesita otra fecha.
+- `due_date` **→ modificado en 4.4:** ahora se calcula automáticamente como
+  `loan_date + timedelta(days=30)` mediante `field(init=False)`. El razonamiento
+  original de 4.2 (política de negocio en el servicio, hecho del dominio,
+  distintas duraciones por categoría) se reconsideró: en Stage 1 la duración
+  es fija (30 días) y hacer imposible el estado inválido por construcción
+  elimina la necesidad de un test negativo.
+- `return_date` es opcional: `None` mientras el libro está prestado, toma
+  valor cuando se ejecuta `return_book()`.
+
+**Distinción `due_date` vs `return_date`:**
+
+| | `due_date` | `return_date` |
+|---|---|---|
+| Naturaleza | Promesa | Hecho consumado |
+| Responde a | ¿Para cuándo lo tengo que devolver? | ¿Cuándo lo devolvió? |
+| Se fija en | Creación del préstamo | `return_book()` |
+| Cambia | No | Solo una vez (de `None` a fecha) |
+| Juntos permiten | — | `was_returned_late()`: ¿hubo retraso? |
+
+**Atributos descartados:**
+
+- `days: int` — redundante. `due_date - loan_date` lo calcula si alguna vez
+  se necesita. No es un atributo del dominio, es un detalle de construcción.
+
+**Progresión de `id` en las entidades:**
+
+| Entidad | ¿Tiene `id` ahora? | ¿Quién lo fuerza? |
+|---------|:-------------------:|--------------------|
+| `Book` | ✅ Sí | `Loan.book_id` (el test de `Loan` falla con `TypeError` si `Book` no tiene `id`) |
+| `User` | ✅ Sí | `Loan.user_id` (ídem) |
+| `Loan` | ❌ No aún | El repositorio (`InMemoryDatabase`), más adelante |
+
+`Loan` no recibe su `id` propio ahora porque nadie lo necesita todavía. Misma
+regla de siempre: cada `id` nace cuando otra entidad o componente lo exige por
+uso, no por anticipación.
+
+### Decisión 4.3 — Validación única: `due_date > loan_date`
+
+**Qué:** la única validación de dominio en `__post_init__` es que la fecha de
+devolución sea posterior a la fecha de préstamo.
+
+**Por qué:**
+
+- `book_id` y `user_id` son `int` — sin validación de dominio. El tipo los
+  protege. Su existencia se verifica por uso.
+- `loan_date` tiene default sensato (`date.today()`). Validar que no sea
+  futura añadiría complejidad sin un caso de uso real en Stage 1.
+- `due_date` es el único campo cuya invariante puede romperse: `due_date`
+  anterior o igual a `loan_date` es un sinsentido de dominio.
+- `return_date` es opcional por definición — no hay invariante que proteger.
+
+**Tests resultantes (fase 2 y 3):**
+
+| # | Test | Fase |
+|---|------|------|
+| 1 | `test_loan_requires_due_date_after_loan_date` | 2 (−) |
+| 2 | `test_loan_created_with_valid_data` | 3 (+) |
+
+**Cadena de RED del test 1:** un solo test de `Loan` fuerza 4 cambios antes
+de llegar al assert real. Es el mismo patrón que usamos con `Book` (Decisión
+3.1): el test falla sobre el primer nombre no definido. La diferencia es que
+aquí los primeros errores son `TypeError`, no `NameError`, porque `book_id` y
+`user_id` fuerzan a que `Book` y `User` ganen un campo `id`.
+
+```python
+def test_loan_requires_due_date_after_loan_date():
+    with pytest.raises(LoanError):
+        Loan(book_id=1, user_id=1, loan_date=date.today(), due_date=date.today())
+```
+
+| # | Error real | Causa | Qué crear |
+|---|-----------|-------|-----------|
+| 1 | `TypeError: Book.__init__() got unexpected keyword argument 'id'` | `Loan` necesita `book_id=1` pero `Book` no tiene `id` | Añadir `id: BookID \| None = None` a `Book` |
+| 2 | `TypeError: User.__init__() got unexpected keyword argument 'id'` | Ídem para `User` | Añadir `id: UserID \| None = None` a `User` |
+| 3 | `NameError: name 'LoanError' is not defined` | No existe la excepción | Crear `class LoanError(LibraryApiError): pass` |
+| 4 | `NameError: name 'Loan' is not defined` | No existe la clase | Crear `@dataclass class Loan: ...` mínima |
+| 5 | `Failed: DID NOT RAISE LoanError` | `Loan` no tiene validación aún | Añadir `__post_init__` con validación `due_date` |
+| 6 | ✅ GREEN | — | — |
+
+> Los pasos 1 y 2 **no son tests de `id`** — no escribimos `test_book_has_id`
+> ni `test_user_has_id`. Es el test de `Loan` forzando a que `Book` y `User`
+> crezcan. Verificación por uso (ver apéndice, tabla de detección temprana).
+
+**Lectura del nombre del test:**
+
+```
+test_loan_requires_due_date_after_loan_date
+│          │         │
+│          │         └── due_date > loan_date (la invariante)
+│          └── "el préstamo exige que…"
+└── entidad bajo test
+```
+
+El nombre no dice «debe existir el atributo `due_date`» — eso se verifica por
+uso en el test positivo. El nombre describe la invariante de dominio: la fecha
+límite de devolución (`due_date`) debe ser posterior a la fecha de préstamo
+(`loan_date`).
+
+**¿Por qué `due_date` y no `return_date` en el test negativo?**
+
+| | `due_date` | `return_date` |
+|---|---|---|
+| Naturaleza | Promesa (fecha límite) | Hecho consumado (fecha real) |
+| Se fija en | Creación del préstamo | `return_book()` (transición) |
+| Invariante en creación | `> loan_date` | Ninguna — es `None` por definición |
+
+`return_date` en creación siempre es `None` — no hay nada que validar. Su
+invariante (`> loan_date`) se verifica en un test de transición, cuando se
+ejecuta `return_book()`, no en uno de creación. Por eso el test negativo de
+creación protege `due_date`, no `return_date`.
+
+### Decisión 4.4 — `due_date` con `field(init=False)`: de validación runtime a invariante estructural
+
+**Punto de partida — el test incompleto:**
+
+El primer test de Loan se escribió con la intención de validar que
+`due_date` debe ser posterior a `loan_date`. Quedó incompleto porque
+faltaba cerrar la llamada a `Loan()` dentro del `with pytest.raises`:
+
+```python
+# Versión original incompleta
+def test_loan_date_requires_due_date_after_loan_date():
+    with pytest.raises(LoanError):
+        loan = Loan(1, 1, )
+        loan_date >= return_date
+```
+
+La lógica era correcta: crear un `Loan` con `due_date` igual o anterior a
+`loan_date` debía lanzar `LoanError`. El test debía ser:
+
+```python
+# Versión que se pretendía escribir
+def test_loan_requires_due_date_after_loan_date():
+    with pytest.raises(LoanError):
+        Loan(book_id=1, user_id=1, due_date=date.today(), loan_date=date.today())
+```
+
+**La pregunta que cambió el rumbo:** al revisar cómo crear `loan_date` y
+`due_date`, surgió la cuestión: ¿`due_date` se pasa desde fuera o se calcula
+automáticamente como `loan_date + 30 días`?
+
+Se evaluaron dos opciones:
+
+| Opción | `due_date` | Constructor | Flexibilidad |
+|--------|-----------|-------------|-------------|
+| A | `field(init=False)` — calculado siempre +30 | `Loan(book_id, user_id)` | Ninguna — 30 días fijos |
+| B | Parámetro con default `None` → +30 si no se pasa | `Loan(book_id, user_id, due_date=...)` | El caller puede pasar otra duración |
+
+Se eligió la **Opción A** para Stage 1: más simple, elimina la ambigüedad de
+«¿quién decide la duración del préstamo?», y hace imposible el estado inválido
+por construcción.
+
+**La clase `Loan` resultante:**
+
+```python
+from datetime import date, timedelta
+from dataclasses import dataclass, field
+
+@dataclass
+class Loan:
+    book_id: BookID
+    user_id: UserID
+    loan_date: date = field(default_factory=date.today)
+    return_date: date | None = None
+    loan_id: LoanID | None = None
+    due_date: date = field(init=False)          # ← no es parámetro, va al final
+
+    def __post_init__(self):
+        self.due_date = self.loan_date + timedelta(days=30)
+```
+
+**Por qué `init=False` y no `default_factory`:**
+
+Podrías pensar en usar `default_factory` con una lambda para calcular
+`due_date` automáticamente:
+
+```python
+# ❌ NO funciona
+due_date: date = field(default_factory=lambda: loan_date + timedelta(days=30))
+```
+
+El problema es simple: `loan_date` no existe en ese scope. La lambda se
+ejecuta sola, sin contexto, sin `self`. Es literalmente como escribir
+`loan_date + timedelta(days=30)` en una línea suelta de Python — da
+`NameError`. No es que «no vea otros campos» como concepto abstracto:
+es que la variable no está definida ahí.
+
+Con `init=False` + `__post_init__`, para cuando `__post_init__` se ejecuta,
+`self.loan_date` ya tiene valor (lo asignó el `__init__` automático). Por
+eso funciona.
+
+> ⚠️ **Orden de campos:** `due_date` va al final de la clase, después de todos
+> los campos con default. Aunque `init=False` lo excluye del constructor,
+> Python lo cuenta como «campo sin default» para la validación de orden.
+> Ponerlo entre `loan_date` (con default) y `return_date` (con default)
+> produce `TypeError: non-default argument 'due_date' follows default argument`.
+
+**Consecuencia en los tests — del negativo al positivo:**
+
+El test negativo original (`test_loan_requires_due_date_after_loan_date`)
+ya no tiene razón de ser. Con `init=False`, `due_date` siempre se calcula
+como `loan_date + 30`. No existe forma de pasar un `due_date` inválido porque
+**no existe forma de pasar `due_date` en absoluto**. La validación pasó de ser
+runtime (`if due_date <= loan_date: raise LoanError`) a ser estructural:
+está garantizada por cómo se construye el objeto.
+
+En su lugar nace un test positivo:
+
+```python
+from datetime import timedelta
+
+from app.models import Loan
+
+
+def test_loan_due_date_is_loan_date_plus_30_days():
+    loan = Loan(book_id=1, user_id=1)
+    assert loan.due_date == loan.loan_date + timedelta(days=30)
+```
+
+**Qué verifica el test:** un único assert que comprueba la relación
+`due_date == loan_date + 30`. No necesita fecha hardcodeada porque en Stage 1
+no existe ningún camino donde `loan_date` sea distinto de `date.today()`.
+Ver la Decisión 4.5 para el razonamiento completo.
+
+**`LoanError` tras este cambio:**
+
+Con la Opción A, `Loan` no tiene ninguna validación runtime. `LoanError`
+queda definida como clase pero ningún código la lanza. En TDD puro, si
+ningún test espera una excepción, esa excepción no debe existir. Se elimina.
+Volverá a nacer cuando el primer test negativo de `Loan` (devoluciones,
+préstamo duplicado) la exija.
+
+**Qué enseña esta decisión sobre diseño de entidades:**
+
+Cuando una invariante «X debe ser mayor que Y» se cumple siempre porque X
+se calcula a partir de Y, has encontrado una **invariante estructural**, no
+de negocio. Las invariantes estructurales no se testean con negativos — se
+testean con positivos que verifican el cálculo. Las invariantes de negocio
+(«un libro prestado no puede prestarse otra vez») sí necesitan test negativo
+porque dependen de decisiones externas (alguien llamó a `loan()` dos veces).
+
+> **Regla:** si puedes hacer imposible un estado inválido por construcción,
+> hacelo. Es más barato que vigilarlo con tests.
+
+### Decisión 4.5 — Un solo test: eliminación del test con fecha hardcodeada
+
+El test con fecha explícita (`loan_date=date(2026, 1, 1)`) se escribió por
+inercia de triangulación: «dos puntos de datos fuerzan la solución general,
+pongamos uno con fecha explícita y otro con default». Pero la triangulación
+solo tiene sentido cuando cada punto de datos por separado admite una solución
+hardcodeada distinta. Aquí no: en Stage 1, `loan_date` siempre es
+`date.today()`. No existe ningún flujo donde `loan_date` tome otro valor.
+
+**El error:** se aplicó el patrón de triangulación sin verificar si el
+segundo punto de datos realmente fuerza algo que el primero no pueda forzar.
+El test con fecha hardcodeada protegía contra una implementación tramposa
+(`self.due_date = date.today() + 30` en vez de `self.loan_date + 30`) que,
+como `loan_date` siempre coincide con `date.today()` en la práctica del
+Stage 1, nunca se manifestaría como bug. Es triangulación vacía: el segundo
+punto de datos no añade cobertura real.
+
+**El test final:**
+
+```python
+from datetime import timedelta
+
+from app.models import Loan
+
+
+def test_loan_due_date_is_loan_date_plus_30_days():
+    loan = Loan(book_id=1, user_id=1)
+    assert loan.due_date == loan.loan_date + timedelta(days=30)
+```
+
+Un solo test que verifica la relación que importa: `due_date` depende de
+`loan_date`, sea cual sea. Si alguien rompe esa relación, el test falla.
+No necesita fecha hardcodeada porque no hay ningún camino por el que
+`loan_date` tome otro valor.
+
+> **Principio:** si no hay caso de uso para `loan_date != date.today()`,
+> el test con fecha hardcodeada es ruido. La triangulación no se aplica
+> mecánicamente: requiere que existan al menos dos caminos de ejecución
+> distintos que ejerciten la misma invariante.
+
+### Decisión 4.6 — Test de creación completa: consistencia con Book y User
+
+Tanto `Book` como `User` tienen un test de creación completa que documenta
+el contrato público de la entidad:
+
+```python
+# Book
+def test_book_created_with_valid_data():
+    book = Book(title="The Odyssey", author="Homer")
+    assert book.title == "The Odyssey"
+    assert book.author == "Homer"
+    assert book.is_available is True
+
+# User
+def test_user_created_with_valid_data():
+    user = User("hector", Email("hector@gmail.com"))
+    assert user.username == "hector"
+    assert user.email.value == "hector@gmail.com"
+```
+
+`Loan` no tenía el suyo. El test existente solo verificaba `due_date`.
+Se añade:
+
+```python
+from datetime import date, timedelta
+
+from app.models import Loan
+
+
+def test_loan_created_with_valid_data():
+    loan = Loan(book_id=1, user_id=1)
+    assert loan.book_id == 1
+    assert loan.user_id == 1
+    assert loan.loan_date == date.today()
+    assert loan.return_date is None
+    assert loan.loan_id is None
+```
+
+**Qué verifica cada assert:**
+
+| Atributo | Assert | Qué garantiza |
+|----------|--------|---------------|
+| `book_id` | `== 1` | El ID pasado se conserva |
+| `user_id` | `== 1` | Ídem |
+| `loan_date` | `== date.today()` | El default `date.today()` se aplica correctamente |
+| `return_date` | `is None` | El préstamo nace sin devolución |
+| `loan_id` | `is None` | El préstamo no tiene ID hasta que el repositorio se lo asigne |
+
+**Por qué `loan_date == date.today()` y no un valor hardcodeado:**
+
+Igual que `test_book_created_with_valid_data` no pasa `is_available=True`
+explícitamente —usa el default y lo verifica—, este test no pasa `loan_date`
+explícitamente. Hardcodear `loan_date=date(2026, 1, 1)` repetiría el error de
+la Decisión 4.5: añadir un valor explícito sin un caso de uso real que lo
+ejerza. El default `date.today()` es parte del contrato público de `Loan`,
+exactamente igual que `is_available=True` lo es de `Book`.
+
+> **Regla de consistencia:** el test de creación completa de una entidad
+> debe pasar solo los parámetros obligatorios (sin repetir los defaults)
+> y verificar todos los atributos visibles, incluyendo los que tienen
+> default. Si el default cambia, el test lo detecta.
+
+### Guía de diseño de entidades — las 5 preguntas
+
+El diseño de `Loan` expuso un patrón de razonamiento que aplica a cualquier
+entidad nueva. Son 5 preguntas en orden:
+
+**1. ¿Qué conecta y cómo?**
+
+Si es una entidad asociativa, conecta dos o más entidades existentes. La
+decisión es: ¿referencia por objeto o por ID? Por ID si Stage 2 está cerca;
+por objeto si la API es puramente en memoria y no habrá persistencia.
+
+**2. ¿Qué atributos le pertenecen solo a ella?**
+
+Atributos que ninguna de las entidades conectadas tiene. Son los *hechos del
+dominio* de esta entidad. Si un atributo pertenece a otra entidad (`title` es
+de `Book`, `email` es de `User`), no va aquí.
+
+**3. ¿Qué invariante de dominio protege?**
+
+¿Qué combinación de valores es un sinsentido en el negocio? Toda entidad
+protege al menos una invariante. Si no encontrás ninguna, es sospechoso.
+
+**4. ¿Qué atributos parecen necesarios pero no lo son?**
+
+Aplicá la navaja: si puedes derivarlo de otros atributos, no lo almacenás.
+Pero cuidado: no todo lo derivable es falso. Preguntate si es un *hecho del
+dominio* (se almacena) o un *detalle de construcción* (se descarta).
+
+**5. ¿Qué tests nacen de esto?**
+
+De las preguntas 2 y 3 salen los tests: un negativo por cada invariante + un
+positivo que verifica todos los atributos con asserts. Si la entidad tiene 1
+invariante → 2 tests. Si tuviera 3 invariantes → 4 tests (3 negativos + 1
+positivo).
+
+**Ficha resumen:**
+
+| Pregunta | Ejemplo con Loan |
+|----------|-----------------|
+| ¿Qué conecta y cómo? | `Book` + `User`, por ID (`book_id`, `user_id`) |
+| ¿Atributos propios? | `loan_date`, `due_date`, `return_date` |
+| ¿Invariante? | Estructural: `due_date = loan_date + 30` (garantizada por construcción, no necesita test negativo) |
+| ¿Atributos falsos? | `days` (derivable de `due_date - loan_date`) |
+| ¿Tests? | 2 positivos (ver 4.4, 4.5 y 4.6) |
 
 ---
 
@@ -1236,6 +1690,8 @@ No todo atributo necesita test negativo. La regla la da el sistema de
 | `User.username` | `str` | `""` | ✅ Sí — `""` es `str` | **Runtime** (`__post_init__`) | ✅ Necesario |
 | `User.email` | `Email` | `"no soy email"` | ❌ No — `str` no es `Email` | **Pyright** (type checker) | ❌ No necesario |
 | `Book.author` | `str` | `""` | ✅ Sí — `""` es `str` | **Runtime** (`__post_init__`) | ✅ Necesario |
+| `Book.id` | `int \| None` | — | No hay valor inválido posible | **Por uso** (otra entidad lo exige) | ❌ No necesario |
+| `User.id` | `int \| None` | — | No hay valor inválido posible | **Por uso** (otra entidad lo exige) | ❌ No necesario |
 
 > **Regla:** si el valor inválido **engaña al type checker** (ej: `""` es un
 > `str` válido para Python pero inválido para el dominio), necesitas un test
@@ -1247,6 +1703,13 @@ No todo atributo necesita test negativo. La regla la da el sistema de
 > que pytest corra. Si alguien borra el campo `email` del modelo, el test
 > positivo `test_user_created_with_valid_data` truena con `AttributeError`
 > al hacer `user.email`. El campo se verifica **por uso**, no por test dedicado.
+>
+> **Ejemplo concreto:** `Book` y `User` no tienen test de `id`. El campo `id` es
+> `int | None` con default `None`. No hay regla de dominio que validar (no hay
+> «id debe ser positivo»). Su existencia se verifica **por uso**: cuando `Loan`
+> pida `book_id` y `user_id`, si `Book` o `User` no tienen `id`, el test de
+> `Loan` falla con `TypeError`. Ese fallo es el que fuerza a añadir el campo —
+> sin un test dedicado para `book.id` o `user.id`.
 
 #### ¿Cuándo normalizar un campo en `__post_init__`?
 
