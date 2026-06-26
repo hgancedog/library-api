@@ -1231,6 +1231,314 @@ positivo).
 
 ---
 
+## Decisión 5.1 — El Protocol va antes que la implementación (y nace del servicio)
+
+### El orden profesional
+
+En arquitectura limpia y DDD el orden es:
+
+```
+Necesidad del servicio → Protocol (contrato) → Implementación
+```
+
+El **servicio** (capa de casos de uso) es quien dicta qué necesita del repositorio.
+El protocolo no se diseña en el vacío pensando «¿qué métodos podría tener un
+repositorio?» — se diseña preguntando «¿qué necesita el servicio para resolver
+este caso de uso?».
+
+En TDD esto se traduce a una secuencia concreta:
+
+1. Escribes un test para `LibraryService.create_book(book_data)`
+2. El test revela que el servicio necesita guardar el libro y verificar que no exista
+3. **Nace el Protocol** con `save_book(book)` y `get_book_by_id(book_id)`
+4. **Implementas** el `InMemoryDatabase` contra ese protocolo
+
+### Por qué el contrato antes que la implementación
+
+| Razón | Explicación |
+|---|---|
+| **El consumidor manda** | El servicio no debería saber si los datos viven en memoria, en SQLite o en PostgreSQL. El protocolo define qué necesita; la implementación decide cómo. |
+| **Swapeabilidad sin tocar tests** | Un criterio de Stage 1 es poder cambiar `InMemoryDatabase` por otra implementación sin tocar los tests del servicio. Si el protocolo nace del servicio, los tests solo conocen el protocolo — no la implementación concreta. |
+| **Nada especulativo** | Si diseñas el protocolo antes del servicio, añadirás métodos que «podrían servir» pero nadie ha pedido. El servicio es el juez: solo entra en el protocolo lo que un test concreto fuerza a usar. |
+| **Python structural subtyping** | `typing.Protocol` permite duck typing con type checking. `InMemoryDatabase` no necesita declarar `implements LibraryRepository` — basta con que tenga los métodos correctos. Pero el Protocol documenta el contrato y habilita el type checker en el servicio. |
+
+### El matiz TDD: «primero el test, luego el protocolo»
+
+El protocolo es un artefacto de diseño que emerge de la **necesidad del consumidor**,
+no de la especulación sobre qué podría necesitar. En TDD:
+
+- **No diseñas el protocolo primero** y luego escribes tests contra él.
+- **Escribes un test del servicio** que fuerce a pedirle algo al repositorio.
+- El protocolo **emerge** de ese test — contiene solo lo que el test necesitó.
+
+El duck typing de Python (con `typing.Protocol`) refuerza esto: no necesitas
+declarar explícitamente que `InMemoryDatabase` implementa `LibraryRepository`.
+Pero definirlo explícitamente **documenta el contrato** y te da type checking
+en el servicio.
+
+### ¿Qué es «create book» en el dominio de biblioteca?
+
+No es magia — es **catalogación**. Cuando una biblioteca adquiere un libro físico,
+un bibliotecario lo registra en el sistema:
+
+```
+«La biblioteca compra 3 ejemplares de Dune.
+ El bibliotecario abre el sistema y registra:
+   Título: Dune
+   Autor: Frank Herbert
+   → El sistema guarda el registro y le asigna un ID.»
+```
+
+`LibraryService.create_book(title, author)` es la operación que un bibliotecario
+ejecutaría desde la interfaz. El repositorio (`InMemoryDatabase`) es donde se
+guarda ese registro. Sin repositorio, los libros viven solo en memoria de una
+variable y se pierden al terminar el programa.
+
+### La cadena completa de responsabilidad
+
+| Capa | Responsable de… | Ejemplo |
+|---|---|---|
+| **Modelo** (`Book`) | Integridad de UN libro | «Un libro sin título no puede existir» |
+| **Repositorio** (`InMemoryDatabase`) | Persistencia del conjunto | «Guardo libros y los recupero por ID» |
+| **Servicio** (`LibraryService`) | Casos de uso / orquestación | «Para crear un libro: valido que el título no esté duplicado y lo guardo» |
+| **Protocol** (`LibraryRepository`) | Contrato entre servicio y repositorio | «El servicio necesita `find_by_title` y `save_book`» |
+
+---
+
+## Decisión 5.2 — Diseño final de `create_book` y qué devuelve
+
+### El código de producción
+
+```python
+def create_book(self, title: str, author: str) -> Book | None:
+    if self.repo.find_by_title(title) is not None:
+        raise DuplicateBookError(
+            f"Book with title '{title}' already exists"
+        )
+
+    book = Book(title=title, author=author)
+    self.repo.save_book(book)
+    return book
+```
+
+### Por qué cada elemento
+
+| Elemento | Por qué |
+|---|---|
+| `find_by_title` | Una copia por título — el título es la clave de unicidad. Sin ISBN ni múltiples copias, es lo único que identifica al libro antes de que tenga ID. |
+| `DuplicateBookError` | Error de dominio específico, no un `ValueError` genérico. Permite que capas superiores lo traduzcan a HTTP 409. |
+| `save_book` | El servicio no sabe cómo se persiste, solo sabe que el repositorio tiene ese método. El ID lo asigna la implementación. |
+| `return book` | Convención: devolver la entidad creada permite al caller inspeccionarla. Pero el valor de retorno no se verifica en el test porque este caso de uso no lo necesita. |
+
+### Lo que NO incluye
+
+| No incluye | Por qué |
+|---|---|
+| `get_book_by_id` en el protocolo | Lo necesitará `create_loan`, no `create_book`. Cada método del protocolo nace de un test que lo fuerza. |
+| Verificación de `book_id` en el test | El ID lo asigna el repositorio; `create_book` no lo usa para nada. Verificarlo sería especulativo. |
+| Verificación de persistencia en el test del servicio | El test del repositorio ya prueba que `save_book` + `find_by_title` funcionan. El test del servicio confía en el repositorio (ya testeado por separado). |
+
+### El test de `create_book`
+
+```python
+def test_create_book():
+    db = InMemoryDatabase()
+    service = LibraryService(db)
+
+    book = service.create_book("Dune", "Herbert")
+
+    assert book.title == "Dune"
+    assert book.author == "Herbert"
+    assert book.is_available is True
+```
+
+El test no llama a `find_by_title` ni verifica `book_id`. Confía en que el
+repositorio funciona (testeado por separado) y solo verifica el contrato del
+servicio: dado título y autor válidos, devuelve un libro correcto.
+
+### Evolución del diseño del test
+
+El test de `create_book` pasó por dos versiones durante la discusión.
+
+**Versión 1 (descartada):**
+
+```python
+def test_create_book():
+    db = InMemoryDatabase()
+    service = LibraryService(db)
+
+    book = service.create_book("Dune", "Herbert")
+
+    # Recuperar para confirmar que se guardó
+    saved = db.find_by_title("Dune")
+    assert saved is not None
+    assert saved.title == "Dune"
+    assert saved.author == "Herbert"
+```
+
+Esta versión incluía `find_by_title` en el test para verificar que el repositorio
+realmente persistió el libro. El razonamiento era: «`create_book` podría devolver
+un `Book` sin haberlo guardado; `find_by_title` es la garantía».
+
+**Por qué se descartó:** el repositorio tiene sus propios tests unitarios que
+prueban que `save_book` + `find_by_title` funcionan. El test del servicio no
+debería re-testear el repositorio — confía en él. Si el test del servicio
+llama a `find_by_title`, está testeando dos unidades a la vez y pierde
+culpabilidad: un fallo no dice si es el servicio o el repositorio.
+
+**Versión 2 (final):**
+
+```python
+def test_create_book():
+    db = InMemoryDatabase()
+    service = LibraryService(db)
+
+    book = service.create_book("Dune", "Herbert")
+
+    assert book.title == "Dune"
+    assert book.author == "Herbert"
+    assert book.is_available is True
+```
+
+El test solo verifica el contrato del servicio: dado título y autor válidos,
+devuelve un libro correcto. La persistencia es responsabilidad del repositorio,
+ya testeado.
+
+> **Principio:** un test de nivel N no re-testea la unidad de nivel N-1.
+> Si el repositorio ya está testeado, el test del servicio confía en él.
+
+### Por qué el test tiene esa forma exacta
+
+| El test… | Por qué |
+|---|---|
+| No llama a `repo.find_by_title()` | El repositorio ya fue testeado por separado. Probar que `save_book` + `find_by_title` funcionan es responsabilidad de `test_inmemory_database.py`, no del test del servicio. |
+| No verifica `book.book_id` | El ID lo asigna el repositorio internamente. `create_book` no lo usa para nada. Verificarlo sería especulativo: anticipar una necesidad de `create_loan` sin que un test lo haya forzado. |
+| Solo verifica `title`, `author`, `is_available` | Son los atributos visibles del libro recién creado que el caso de uso expone. Si el servicio devuelve un libro, debe ser correcto. |
+| Usa `InMemoryDatabase` real, no un mock | En Stage 1 el repositorio es lo bastante simple como para usarlo directamente. Un mock añadiría complejidad sin beneficio. |
+
+### El test de duplicado
+
+```python
+def test_create_duplicate_book_fails():
+    db = InMemoryDatabase()
+    service = LibraryService(db)
+    service.create_book("Dune", "Herbert")
+
+    with pytest.raises(DuplicateBookError):
+        service.create_book("Dune", "Herbert")
+```
+
+Este test fuerza la existencia de `find_by_title` en el protocolo.
+
+### Por qué `create_book` no debería devolver el ID
+
+`create_book` es un **comando** (CQS): cambia el estado del sistema. Los comandos
+tienen un solo propósito — en este caso, catalogar un libro. Que el libro tenga
+ID es detalle interno del repositorio.
+
+El caller no necesita el ID al crear porque:
+
+1. Ya conoce `title` y `author` (los acaba de pasar).
+2. `is_available` siempre es `True` para un libro recién creado.
+3. Si `create_loan` necesita el ID, que lo obtenga con `find_by_title`.
+
+Incluir `book_id` en el retorno de `create_book` sería anticipar una necesidad de
+`create_loan` sin que un test lo haya forzado primero — justo lo que la
+Decisión 5.1 prohíbe.
+
+### Orden de implementación: bottom-up
+
+Cada unidad se testea antes de usarla en una unidad superior:
+
+```
+1. Test de InMemoryDatabase.save_book()       → ¿guarda y asigna ID?
+2. Test de InMemoryDatabase.find_by_title()    → ¿recupera lo guardado?
+3. Test de LibraryService.create_book()        → ¿orquesta bien?
+4. Test de LibraryService (duplicado)           → ¿rechaza duplicado?
+```
+
+El servicio usa un repositorio **ya testeado**, no uno que se testea por primera
+vez dentro del test del servicio. Si el test del servicio falla, los tests
+unitarios del repositorio te dicen si la raíz está ahí o más arriba.
+
+### Cómo el TDD redirigió el desarrollo: del servicio al repositorio
+
+La intención inicial de esta sesión era escribir el test de `create_book` y
+empezar a implementar. Pero el TDD no lo permitió. Cada paso reveló una
+dependencia que no existía y forzó a cambiar de dirección.
+
+**Cadena completa de redirección:**
+
+```
+Intención: "Testeamos create_book"
+              │
+              ▼
+El test necesita:   LibraryService(repo)
+              │
+              ▼
+¿Qué es repo?       LibraryRepository (Protocol) — no existe
+              │
+              ▼
+¿Qué métodos?        save_book, find_by_title — dictados por create_book
+              │
+              ▼
+¿Quién implementa?   InMemoryDatabase — no existe
+              │
+              ▼
+¿Está testeado?      No — el TDD no permite usarlo sin tests propios
+              │
+              ▼
+Orden real:          Repo tests → Protocol → Service tests
+```
+
+**Lo que significa en la práctica:**
+
+| Paso | Lo que queríamos hacer | Lo que el TDD nos forzó a hacer |
+|---|---|---|
+| 1 | Test de `create_book` | No — primero necesitamos `InMemoryDatabase` |
+| 2 | Escribir `InMemoryDatabase` de una | No — primero necesitamos tests del repo |
+| 3 | Usar el repo sin testearlo | No — TDD sociable confía en el repo pero solo si está testeado |
+| 4 | Test del repo → OK, implementar repo → OK, implementar protocolo → OK | **Ahora sí**: test de `create_book` |
+
+**Por qué esto es TDD genuino, no un desvío:**
+
+El TDD no es «escribir tests en el orden que planeaste». Es «escribir el test
+que toca ahora, y dejar que el test te diga qué crear después». Cada test fuerza
+a crear **lo mínimo necesario** para que pase:
+
+```
+Test de save_book     → fuerza a crear InMemoryDatabase.save_book()
+Test de find_by_title  → fuerza a crear InMemoryDatabase.find_by_title()
+Test de create_book    → fuerza a crear LibraryService + LibraryRepository
+Test de duplicado      → fuerza a crear DuplicateBookError
+```
+
+Si hubiéramos escrito `create_book` primero sin testear el repositorio, el test
+del servicio habría fallado por razones que no son del servicio (el repo no
+funciona). Habríamos mezclado dos problemas en un solo test.
+
+> **Regla que el TDD aplicó aquí:** no puedes usar una dependencia que no está
+> testeada. Si el servicio necesita el repositorio, el repositorio debe pasar
+> sus tests antes. No es una regla de estilo — es una regla de culpabilidad:
+> cuando un test falla, quieres saber exactamente qué se rompió.
+
+**Comparación con el desarrollo sin TDD:**
+
+| Sin TDD | Con TDD |
+|---|---|
+| Escribes `LibraryService` asumiendo métodos del repo | El test te dice qué métodos necesita el repo |
+| Implementas el repo después, sin tests propios | El repo nace con tests antes que el servicio |
+| Si algo falla, no sabes qué capa es | Cada fallo señala una capa exacta |
+| El orden lo decide el programador | El orden lo deciden las dependencias |
+
+**Lección:** la intención de «testear el servicio» era correcta como objetivo
+final, pero incorrecta como primer paso. El TDD expuso la cadena de dependencias
+y redirigió el desarrollo al lugar correcto: el repositorio, la capa más baja.
+Es el mismo principio que vimos con `BookError`: no podías testear `Book` hasta
+crear la excepción. Pero aplicado a capas enteras de la arquitectura.
+
+---
+
 ## Patrones y principios descubiertos
 
 > Los patrones no se estudian de antemano. Emergen de los tests y se
