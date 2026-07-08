@@ -16,6 +16,11 @@ ENV/
 *.pyo
 # Pyright cache
 .pyright_cache/
+# Coverage reports
+.coverage
+htmlcov/
+# Pytest cache
+.pytest_cache/
 
 # --- Visual Studio Code ---
 # Ignore local workspace settings
