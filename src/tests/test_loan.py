@@ -1,6 +1,8 @@
 from datetime import date, timedelta
 
-from app.models import Loan
+import pytest
+
+from app.models import Loan, LoanError
 
 
 def test_loan_due_date_is_loan_date_plus_30_days():
@@ -15,3 +17,8 @@ def test_loan_created_with_valid_data():
     assert loan.loan_date == date.today()
     assert loan.return_date is None
     assert loan.loan_id is None
+
+
+def test_loan_rejects_return_date_before_loan_date():
+    with pytest.raises(LoanError, match="return_date cannot be earlier"):
+        Loan(book_id=1, user_id=1, return_date=date.today() - timedelta(days=1))

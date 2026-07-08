@@ -70,7 +70,11 @@ class Loan:
     loan_date: date = field(default_factory=date.today)
     return_date: date | None = None
     loan_id: LoanID | None = None
-    due_date: date = field(init=False)
 
     def __post_init__(self):
-        self.due_date = self.loan_date + timedelta(days=30)
+        if self.return_date is not None and self.return_date < self.loan_date:
+            raise LoanError("return_date cannot be earlier than loan_date")
+
+    @property
+    def due_date(self) -> date:
+        return self.loan_date + timedelta(30)
