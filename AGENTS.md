@@ -30,8 +30,6 @@ pyright
 ruff check src/ && ruff format src/ && pyright
 ```
 
-> ⚠️ `pytest` is not yet in dev deps — must be added to `pyproject.toml` before running tests.
-
 ## File structure
 
 ```
@@ -83,6 +81,22 @@ LibraryApiError
 - Ruff — zero warnings
 - Test coverage > 90% on business logic
 
+## Productivity guard — anti-pattern detection
+
+**If you detect any of these patterns, warn me immediately and suggest a course correction:**
+
+1. **Docs > code ratio**: when project documentation (`.md` files in `project_docs/`) exceeds production code + tests by more than 3:1, flag it. The project is a library API, not a wiki.
+
+2. **Meta-documentation creep**: writing docs about tools (Pi, git, seguridad, python-theory, etc.) that do not advance the current stage. These belong in a personal knowledge base, not in the project repo.
+
+3. **Planning as procrastination**: spending more than one session on a design note, roadmap refinement, or decision journal entry without producing code. Stop writing ABOUT the code and write THE code.
+
+4. **Tool configuration without implementation**: adding hooks, scripts, linters, or CI config for features that don't exist yet. Stage 1 doesn't need Docker, K8s, or CI pipelines — it needs a working in-memory API.
+
+5. **Session without a passing test**: if a full session ends without at least one new passing test that advances Stage 1 completion criteria, flag it.
+
+**When I warn you**: stop writing docs/config immediately. Open the task that moves Stage 1 forward. If in doubt, the answer is always: write the next failing test.
+
 ## TDD rule — strict
 
 **RED → GREEN → TRIANGULATE → REFACTOR**
@@ -91,9 +105,7 @@ No production code before a failing test. This is not negotiable in Stage 1.
 
 ## Known tech debt
 
-- **TD-001** `Optional[date]` in `Loan.return_date` — should be `date | None`
-- **TD-002** `pytest` + `pytest-cov` missing from dev deps — blocking
-- **TD-003** Email regex lives in `LibraryService.register_user` — should be in model/validator layer
+_None at the moment._
 
 ## Context loading policy
 
