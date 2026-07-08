@@ -2740,5 +2740,39 @@ malicioso ejecuta código al instalarse, sin necesidad de importarlo.
 
 ---
 
+## I3 — Simplificación de configuración de subagentes Pi
+
+### Decisión I3.1 — Eliminar overrides por subagente; usar default del sistema
+
+**Qué:** se eliminan todas las configuraciones de `agentOverrides` en
+`.pi/settings.json`. Todos los subagentes usan ahora el modelo y thinking
+level por defecto del sistema.
+
+**Por qué:**
+
+1. **DeepSeek v4 colapsa los niveles de thinking.** `off` → desactivado,
+   `minimal`/`low`/`medium`/`high` → todos equivalen a `high`. Solo hay
+   2 niveles reales: pensando o no pensando.
+
+2. **Stage 1-4 es código simple.** Dataclasses, in-memory DB, single
+   process. Ningún subagente malgasta tokens pensando en algo trivial.
+
+3. **Menos mantenimiento.** Una configuración menos que mantener y
+   documentar. Si no hay ganancia real, es ruido.
+
+**Configuración anterior (de referencia):** asignaba pro+thinking a diseño
+(`sdd-proposal`, `sdd-spec`, `sdd-design`, `sdd-tasks`), flash+thinking a
+ejecución (`sdd-explore`, `sdd-apply`, `worker`), y flash sin thinking a
+tareas mecánicas (`sdd-init`, `sdd-verify`, `sdd-sync`, `sdd-archive`,
+`scout`, `delegate`). Con DeepSeek, la distinción de niveles era ilusoria.
+
+**Cuándo reintroducir:** si en Stage 5+ (FastAPI, auth, endpoints) el
+consumo de tokens se vuelve problemático, reintroducir overrides para
+optimizar: flash sin thinking para tareas mecánicas, pro con thinking
+para diseño y revisión. La referencia de cómo configurarlo está en
+memoria (Engram) bajo `config/pi-subagents`.
+
+---
+
 > **Próxima sesión:** continuar con los tests de `Loan` — devolución y
 > préstamo duplicado.
