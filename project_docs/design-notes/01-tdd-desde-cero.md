@@ -10,11 +10,22 @@
 
 Este documento es el **registro único** de todas las decisiones tomadas durante la
 reconstrucción de library-api aplicando TDD estricto desde cero. Cada decisión
-incluye su por qué. Incluye también un [apéndice](#apéndice) con la guía TDD paso a paso como
-referencia práctica.
+incluye su por qué.
+
+**Estructura:**
+
+- **[Parte I](#parte-i--decisiones-de-diseño-del-sistema)** — Decisiones de diseño del sistema: entidades, Value Objects,
+  excepciones, Protocol, servicio. Lo que construimos.
+- **[Parte II](#parte-ii--decisiones-de-infraestructura-y-herramientas)** — Decisiones de infraestructura: hooks de git,
+  security-gate, entorno de desarrollo. Cómo trabajamos.
+- **[Apéndice](#apéndice)** — Guía TDD paso a paso como referencia práctica.
 
 No solo se documenta el TDD: se documenta cada elección de herramienta, estructura,
 diseño y conocimiento adquirido.
+
+---
+
+# Parte I — Decisiones de diseño del sistema
 
 ---
 
@@ -1225,13 +1236,82 @@ positivo).
 |----------|-----------------|
 | ¿Qué conecta y cómo? | `Book` + `User`, por ID (`book_id`, `user_id`) |
 | ¿Atributos propios? | `loan_date`, `due_date`, `return_date` |
-| ¿Invariante? | Estructural: `due_date = loan_date + 30` (garantizada por construcción, no necesita test negativo) |
+| ¿Invariante? | Estructural: `due_date = loan_date + 30` (garantizada por construcción). Negocio: `return_date` no puede ser anterior a `loan_date` (protegida con test negativo en 4.8). |
 | ¿Atributos falsos? | `days` (derivable de `due_date - loan_date`) |
-| ¿Tests? | 2 positivos (ver 4.4, 4.5 y 4.6) |
+| ¿Tests? | 2 positivos + 1 negativo (ver 4.4, 4.5, 4.6 y 4.8) |
+
+### Decisión 4.7 — `due_date` como `@property` en vez de `field(init=False)`
+
+**Qué:** `due_date` pasó de ser un campo calculado en `__post_init__` a una
+propiedad (`@property`) que se calcula bajo demanda.
+
+**Por qué:** el cambio fue puramente pragmático. La versión anterior:
+
+```python
+due_date: date = field(init=False)
+
+def __post_init__(self):
+    self.due_date = self.loan_date + timedelta(days=30)
+```
+
+...generaba un campo con valor duplicado en memoria. La versión actual:
+
+```python
+@property
+def due_date(self) -> date:
+    return self.loan_date + timedelta(days=30)
+```
+
+...calcula el valor cada vez que se accede, sin almacenarlo. Como `loan_date`
+es inmutable en la práctica (nunca cambia tras la creación), el resultado es
+siempre el mismo. La propiedad expresa mejor la intención: `due_date` no es
+un dato independiente, es una función de `loan_date`.
+
+**Consecuencia para el test:** el test positivo
+test_loan_due_date_is_loan_date_plus_30_days`
+sigue siendo válido sin cambios — verifica la misma relación.
+
+### Decisión 4.8 — Nueva invariante: `return_date` no puede ser anterior a `loan_date`
+
+**Qué:** `Loan` ahora protege una nueva invariante de negocio: la fecha de
+devolución real (`return_date`) no puede ser anterior a la fecha del préstamo.
+
+**Por qué:** devolver un libro antes de haberlo prestado es un sinsentido
+de dominio. A diferencia de `due_date` (que es una invariante estructural
+garantizada por construcción), `return_date` la proporciona un caller externo
+(el servicio, al ejecutar `return_book()`). El modelo debe protegerse contra
+valores inválidos.
+
+**Implementación:**
+
+```python
+def __post_init__(self):
+    if self.return_date is not None and self.return_date < self.loan_date:
+        raise LoanError("return_date cannot be earlier than loan_date")
+```
+
+**Test negativo asociado:**
+
+```python
+def test_loan_rejects_return_date_before_loan_date():
+    with pytest.raises(LoanError, match="return_date cannot be earlier"):
+        Loan(book_id=1, user_id=1, return_date=date.today() - timedelta(days=1))
+```
+
+**Por qué `LoanError` reaparece:** en la Decisión 4.4 se eliminó `LoanError`
+porque ninguna validación runtime la lanzaba. Esta nueva invariante la hace
+necesaria de nuevo. `LoanError` nace ahora de un test negativo concreto, no
+de una anticipación de diseño.
+
+**Por qué `match=` en `pytest.raises`:** el parámetro `match` verifica
+que el mensaje de la excepción contenga el texto esperado. Esto hace el
+test más preciso: si en el futuro alguien lanza `LoanError` por un motivo
+distinto, este test específico falla. Sin `match`, el test solo verifica
+el tipo de excepción, no el motivo.
 
 ---
 
-## Decisión 5.1 — El Protocol va antes que la implementación (y nace del servicio)
+## D5.1 — El Protocol va antes que la implementación (y nace del servicio)
 
 ### El orden profesional
 
@@ -1305,7 +1385,7 @@ variable y se pierden al terminar el programa.
 
 ---
 
-## Decisión 5.2 — Diseño final de `create_book` y qué devuelve
+## D5.2 — Diseño final de `create_book` y qué devuelve
 
 ### El código de producción
 
@@ -1444,7 +1524,7 @@ El caller no necesita el ID al crear porque:
 
 Incluir `book_id` en el retorno de `create_book` sería anticipar una necesidad de
 `create_loan` sin que un test lo haya forzado primero — justo lo que la
-Decisión 5.1 prohíbe.
+D5.1 prohíbe.
 
 ### Orden de implementación: bottom-up
 
@@ -1562,7 +1642,11 @@ crear la excepción. Pero aplicado a capas enteras de la arquitectura.
 
 ---
 
-## Decisión de infraestructura — Hook pre-push `check-tests`
+# Parte II — Decisiones de infraestructura y herramientas
+
+---
+
+## I1 — Hooks de git: pre-commit y pre-push `check-tests`
 
 ### Contexto
 
@@ -1937,6 +2021,23 @@ de una decisión de diseño. Se crea antes del primer test de entidad.
 | 6º | Casos límite | Entidad — blindaje contra operaciones ilegales | Negativos | `pytest.raises(EntidadError)` |
 | 7º | Revisión de diseño | Manual, sin test | — | ¿El código toca la BD? ¿Sabe de fechas? |
 
+**¿Qué pasa si una fase «no aplica» para una entidad?**
+
+No todas las entidades tienen comportamiento en cada fase. Saltarse una fase
+no es un agujero — es que la entidad es simple y no tiene ese tipo de
+comportamiento. El orden de trabajo es una guía, no una checklist que deba
+llenarse a la fuerza.
+
+Estado actual del proyecto:
+
+| Paso | Book | User | Loan |
+|------|------|------|------|
+| 2. Negativos de creación | Hecho | Hecho | **No aplica** — campos obligatorios son `int` y `date`; Pyright los protege |
+| 3. Positivo de creación | Hecho | Hecho | Hecho |
+| 4. Consulta de estado | `can_be_loaned()` | **No aplica** — solo tiene `username` y `email`, sin estado que consultar | `due_date` |
+| 5. Transiciones (`loan`, `return`) | **Falta** | **No aplica** | **Falta** |
+| 6. Casos límite | **Falta** | **No aplica** | `return_date < loan_date` |
+
 ### Paso 1 — Value Objects (datos pequeños)
 
 **Objetivo:** asegurar que los datos que componen la entidad son válidos por sí mismos.
@@ -2226,6 +2327,19 @@ def loan(self):
 
 > Cada «¿qué debería pasar si…?» es un test.
 
+**¿Dónde vive el blindaje?** Las invariantes de negocio se protegen en el primer
+lugar donde se puede detectar la violación:
+
+| Invariante | Vive en | Por qué |
+|---|---|---|
+| «Un libro prestado no puede prestarse otra vez» | `Book.loan()` | La violación solo es detectable cuando alguien llama a `loan()` |
+| «No se puede devolver un libro disponible» | `Book.return_book()` | Ídem — solo detectable en la transición |
+| «return_date no puede ser < loan_date» | `Loan.__post_init__` | Detectable apenas se construye el objeto — rechazar temprano evita estados inválidos en memoria |
+
+> **Regla:** si la violación se puede detectar en el constructor, protegela ahí.
+> Si depende de una transición de estado, protegela en el método. No hay un solo
+> lugar — depende de cuándo se manifiesta la violación.
+
 #### 6.1 — Un libro prestado no puede volver a prestarse
 
 ```python
@@ -2260,6 +2374,27 @@ def test_cannot_return_book_that_is_available():
     with pytest.raises(BookError):
         book.return_book()
 ```
+
+#### 6.3 — `return_date` no puede ser anterior a `loan_date`
+
+```python
+def test_loan_rejects_return_date_before_loan_date():
+    with pytest.raises(LoanError, match="return_date cannot be earlier"):
+        Loan(book_id=1, user_id=1, return_date=date.today() - timedelta(days=1))
+```
+
+**GREEN:**
+
+```python
+# models.py — Loan.__post_init__
+def __post_init__(self):
+    if self.return_date is not None and self.return_date < self.loan_date:
+        raise LoanError("return_date cannot be earlier than loan_date")
+```
+
+Esta invariante se protege en el constructor, no en un método de transición,
+porque la violación es detectable apenas se construye el objeto. Rechazar
+temprano evita que un `Loan` con estado inválido exista en memoria.
 
 ### Paso 7 — Revisión de diseño (manual, sin test)
 
@@ -2326,4 +2461,284 @@ en `__post_init__`.
 
 4. **Testabilidad aislada.** Probar `Email` requiere 2 tests y cero dependencias.
    Si la validación estuviera dentro de `User`, cada test del email necesitaría
-   crear un `User`.
+       crear un `User`.
+
+---
+
+## I2 — Extensión security-gate y hardening de seguridad de Pi
+
+> Fecha: 28 junio 2026
+
+No se escribió código de producción ni tests del dominio. Se investigaron los
+mecanismos de seguridad de Pi y se implementó una defensa en profundidad para
+el entorno de desarrollo.
+
+### I2.1 — Documento de referencia de seguridad
+
+**Qué:** se crea `project_docs/SEGURIDAD-PI.md`, un documento de referencia
+personal (no trackeado en git) que cataloga los vectores de riesgo del agente Pi.
+
+**Por qué:** Pi corre con los permisos completos del usuario que lo lanza — sin
+sandbox, sin jaula, sin restricción de paths. Entender los riesgos es el primer
+paso para mitigarlos. El documento cubre 8 áreas:
+
+1. Herencia total de permisos de usuario
+2. Skills de terceros como vector de ataque (mismo riesgo que AGENTS.md)
+3. AGENTS.md malicioso en repos clonados
+4. Vulnerabilidades npm en dependencias de Pi (contexto CLI → riesgo nulo)
+5. Scripts de instalación frenados por npm (`allow-scripts`)
+6. Acceso de red sin restricción
+7. Subagentes e intercomunicación entre sesiones
+8. Defensa activa — extensión `security-gate`
+
+**Ubicación:** `project_docs/SEGURIDAD-PI.md` (en `.gitignore`, no se commitea).
+
+### I2.2 — Extensión security-gate
+
+**Qué:** se crea `~/.pi/agent/extensions/security-gate.ts`, una extensión de Pi
+que intercepta `tool_call` para bloquear operaciones peligrosas.
+
+**Por qué:** Pi no trae protecciones runtime por defecto. Su filosofía es
+«sin permisos, sin popups — ejecutalo en un contenedor o construí tu propio
+flujo de confirmación». La extensión cubre tres frentes:
+
+1. **Confirmación** para todos los comandos de riesgo — nada se bloquea sin preguntar.
+   Se clasifican por severidad (🔴 crítico, 🟠 alto, 🟡 medio):
+   - Crítico: `rm -rf`, `chmod 777`, `mkfs`, `dd`, fork bombs, `curl | sh`
+   - Alto: `sudo`, `git push --force`, `git reset --hard`
+   - Medio: `git push main/master`, `npm install -g`, `docker rm`
+
+2. **Confirmación para paths sensibles** en lecturas y escrituras:
+   - `~/.ssh/`, `~/.aws/`, `~/.config/gh/`, `.gitconfig`, `.npmrc`
+   - `/etc/passwd`, `/etc/shadow`, `/proc/*`
+   - `id_rsa`, `id_ed25519`, `*.pem`, archivos `credentials`
+
+**Cómo desactivarla:** `pi --exclude-tools security_gate` o renombrar el archivo.
+**Cómo verificarla:** comando `/security-gate` dentro de Pi.
+
+**Modo:** confirmación — todos los guards preguntan antes de bloquear.
+Nada es hard-blocked. El usuario siempre tiene la última palabra.
+
+**Efectividad esperada:** alta para comandos destructivos accidentales y
+lecturas de paths sensibles. No protege contra skills maliciosas que usen la
+red (para eso está el punto 2 del documento de referencia: solo instalar skills
+de fuentes confiables).
+
+### I2.3 — Mecanismos de Pi evaluados y descartados
+
+**Qué:** se evaluaron los mecanismos built-in de Pi y Gentle AI para seguridad
+runtime. Ninguno resultó suficiente por sí solo:
+
+| Mecanismo | ¿Protege comandos destructivos? | ¿Protege lecturas sensibles? | ¿Protege skills maliciosas? |
+|---|---|---|---|
+| Project Trust (Pi) | No — solo controla carga de `.pi/` | No | No — aplica a proyecto local, no a skills globales |
+| `--no-extensions` | No — es binario, todo o nada | No | No — desactiva extensiones, no skills |
+| `--offline` | No | No | Parcial — pero inhabilita búsquedas web legítimas |
+| `review-risk` (Gentle AI) | No — revisa código producido, no runtime | No | No |
+| `allow-scripts` (npm) | No — solo en instalación | No | No |
+
+**Por qué se descartaron:** ninguno opera en runtime interceptando las
+herramientas del agente. Todos son controles de configuración o de revisión
+de código. La extensión `security-gate` llena ese vacío.
+
+### I2.4 — Las vulnerabilidades npm de Pi no son responsabilidad del proyecto
+
+**Qué:** durante `pi update --extensions` aparecieron 3 vulnerabilidades npm
+(esbuild, protobufjs, hono). Se resolvieron con `npm audit fix` en
+`~/.pi/agent/npm/`. Quedó 1 sin resolver (`@mariozechner/pi-coding-agent`,
+paquete deprecado).
+
+**Por qué no son problema:** las 4 vulnerabilidades afectan a dependencias de
+Pi (CLI local), no a `library-api` (Python). En un CLI, el único input es el
+usuario — no hay superficie de ataque remota. Las vulnerabilidades npm solo
+son relevantes en servidores web expuestos.
+
+**Regla establecida:** las dependencias de `library-api` (Python, `pyproject.toml`)
+sí deben mantenerse al día y auditarse. Las de Pi (npm global) son
+responsabilidad del equipo de Pi, no del proyecto.
+
+### I2.5 — Descubrimiento: web_search y fetch_content no interceptados
+
+**Qué:** se descubre que la extensión security-gate original solo interceptaba
+`bash`, `read`, `write` y `edit`. Las herramientas `web_search` y `fetch_content`
+quedaban fuera del gate, creando un bypass para skills maliciosas.
+
+**Por qué es relevante:** una skill maliciosa podría usar `web_search` para
+enviar datos sensibles codificados en queries de búsqueda (ej. claves privadas,
+tokens) o `fetch_content` para conectar a servicios de exfiltración (requestbin,
+webhook.site). La investigación confirmó que el hook `tool_call` de la
+ExtensionAPI de Pi se dispara para **todas** las herramientas — la extensión
+simplemente no las estaba escuchando.
+
+**Prueba de concepto:** se verificó que `web_search` no era bloqueado al
+intentar buscar un patrón de clave privada. La prueba colateralmente expuso un
+bug en `pi-web-access` (ver I2.7).
+
+### I2.6 — Extensión del security-gate: Guards 4 (web_search) y 5 (fetch_content)
+
+**Qué:** se añaden dos nuevos guards al security-gate en
+`~/.pi/agent/extensions/security-gate.ts`.
+
+**Guard 4 — web_search:**
+
+- **Confirmación:** 8 patrones de exfiltración en queries (claves privadas RSA/SSH,
+  tokens GitHub `ghp_*`, AWS `AKIA*`, JWTs `eyJ*`, API keys `sk-*`, hashes hex
+  de 64+ chars, Bearer tokens). Antes eran hard-blocked.
+- **Confirmación:** queries de más de 300 caracteres (posible encoding de datos)
+
+**Guard 5 — fetch_content:**
+
+- **Confirmación:** 10 patrones de URLs sospechosas (requestbin.com/.net/.io,
+  webhook.site, Pipedream, hookbin, beeceptor, mockapi.io, pastetxt, IPs directas
+  con puerto, credenciales en query params `?token=`, `?key=`, `?secret=`).
+  Antes eran hard-blocked.
+- **Confirmación:** cualquier URL externa que no sea GitHub, PyPI, crates.io,
+  docs.rs, npm, MDN, Node.js o Python.org
+
+**Comando `/security-gate`** actualizado para reportar las 5 categorías de
+patrones (antes reportaba 3).
+
+**Por qué no se interceptan todas las herramientas:** interceptar herramientas
+como `grep`, `find`, `todo`, `mem_*`, `lsp_*`, `module_report` degradaría la
+funcionalidad básica de Pi sin aportar protección real significativa. La defensa
+en profundidad se apoya en que:
+
+1. Las herramientas de escritura/ejecución/red **sí** están interceptadas
+2. Los subagentes **sí** cargan el security-gate (ver I2.8)
+3. La capa más importante sigue siendo no instalar skills de fuentes no
+   confiables
+
+### I2.7 — Bug documentado: sendCuratorFallbackUpdate en pi-web-access
+
+**Qué:** se documenta un bug en `pi-web-access/index.ts` donde la función
+`sendCuratorFallbackUpdate` se declara con `const` dentro del bloque `try`
+(línea 1139) pero se referencia en el bloque `catch` (línea 1188). Como `const`
+tiene ámbito de bloque en JavaScript/TypeScript, la referencia en el `catch`
+produce `ReferenceError`.
+
+**Impacto:** si falla la apertura del navegador del curator de búsqueda, Pi
+crashea con excepción no capturada en lugar de mostrar un mensaje de fallback.
+
+**Solución propuesta:** mover la declaración de `sendCuratorFallbackUpdate`
+antes del `try/catch`.
+
+**Estado:**
+
+- Issue en GitHub: [#103](https://github.com/nicobailon/pi-web-access/issues/103) (abierto por otro usuario)
+- Comentario nuestro añadido el 2026-07-01 confirmando el bug en v0.13.0 + fix verificado
+- Fix local aplicado: `sendCuratorFallbackUpdate` movido antes del `try`, `handle?.url` en vez de `handle!.url`
+- Workaround: `"workflow": "auto-summary"` en `~/.pi/web-search.json`
+- ⚠️ `pi update --extensions` revierte el fix
+
+**Ubicación:** `~/.pi/agent/npm/node_modules/pi-web-access/index.ts`.
+
+**Ubicación de la documentación:** `project_docs/SEGURIDAD-PI.md` sección 9.
+
+### I2.8 — Verificación: los subagentes SÍ cargan extensiones globales
+
+**Qué:** se verificó que los subagentes de Pi cargan las extensiones desde las
+mismas ubicaciones que la sesión padre (`~/.pi/agent/extensions/`).
+
+**Evidencia:** la documentación de extensiones de Pi (`docs/extensions.md`,
+línea 431) establece que al hacer fork o iniciar una sesión nueva, Pi
+"reloads and rebinds extensions for the new session". Cada subagente es una
+sesión Pi independiente con su propia instancia del security-gate.
+
+**Implicación:** la afirmación inicial de que "el security-gate no se propaga
+a subagentes" era incorrecta. Un subagente malicioso que intente `curl -d @file`
+será bloqueado por su propia instancia del security-gate igual que en la sesión
+padre.
+
+**Corrección documental:** se actualizaron la sección 8 (tabla de herramientas),
+10.1 y 10.3 de `SEGURIDAD-PI.md` para reflejar este hallazgo.
+
+### I2.9 — Refactor: todos los guards pasan a modo confirmación
+
+> Fecha: 1 julio 2026
+
+**Qué:** se refactoriza `security-gate.ts` para que ningún patrón se bloquee
+sin preguntar. Se fusionan `DANGEROUS_PATTERNS` y `CONFIRM_PATTERNS` en un
+solo array `BASH_PATTERNS` con niveles de severidad (`critical`, `high`,
+`medium`). Los 5 guards (bash, read, write, web_search, fetch_content) ahora
+usan `ctx.ui.confirm()` con iconos de severidad (🔴🟠🟡).
+
+**Por qué:** el usuario preguntó por qué `sudo` se bloqueaba sin preguntar.
+El diseño original equiparaba erróneamente `sudo` con `rm -rf`: ambos se
+hard-blockeaban. El usuario quiere decidir en todos los casos.
+
+**Cambios:**
+
+- `DANGEROUS_PATTERNS` + `CONFIRM_PATTERNS` → `BASH_PATTERNS` (28 patrones)
+- Paths sensibles: de hard block a `ctx.ui.confirm()`
+- web_search exfiltración: de hard block a `ctx.ui.confirm()`
+- fetch_content URLs sospechosas: de hard block a `ctx.ui.confirm()`
+- Comando `/security-gate`: ahora reporta "confirmation mode"
+
+---
+
+## I3 — Defensas npm contra paquetes maliciosos
+
+> Fecha: 1 julio 2026
+
+### I3.1 — `min-release-age=3`
+
+**Qué:** se configura `min-release-age=3` en `~/.npmrc` global. npm rechaza
+cualquier versión de paquete publicada hace menos de 3 días.
+
+**Por qué:** la mayoría de paquetes maliciosos se detectan en las primeras
+horas (Socket.dev, Snyk, Aikido). Esperar 72h también supera la ventana de
+"unpublish" de npm.
+
+**Limitación:** npm no tiene exclusiones como pnpm. Si se necesita una versión
+urgente, toca bajar temporalmente a `min-release-age=0`.
+
+### I3.2 — `ignore-scripts=true`
+
+**Qué:** se configura `ignore-scripts=true` globalmente. Todos los lifecycle
+scripts (`postinstall`, `preinstall`, etc.) se suprimen durante `npm install`.
+
+**Por qué:** los `postinstall` son el vector #1 de malware en npm. Un paquete
+malicioso ejecuta código al instalarse, sin necesidad de importarlo.
+
+**Coste:** paquetes con native modules (esbuild, koffi) necesitan `npm rebuild`.
+
+### I3.3 — `allow-git=none`
+
+    **Qué:** se configura `allow-git=none`. npm rechaza dependencias instaladas
+    directamente desde repositorios git.
+
+    **Por qué:** una dependencia git puede incluir un `.npmrc` que sobreescribe
+    el path a `git` y ejecuta código durante el install, incluso con
+    `--ignore-scripts`. Es el vector más potente de los tres porque burla
+    `ignore-scripts`.
+
+    ### I3.4 — `engine-strict=true`
+
+    **Qué:** se configura `engine-strict=true`. npm rechaza paquetes cuyo
+    `engines` en `package.json` no coincida con la versión de Node instalada.
+
+    **Por qué:** protege contra paquetes abandonados o incompatibles que pueden
+    causar comportamientos impredecibles. No es defensa antimalware pero sí
+    contra degradación silenciosa del entorno.
+
+    ### I3.5 — Configuraciones evaluadas y no aplicadas
+
+    - **`audit=true`**: ya es default en npm 11. Reporta CVEs documentados pero
+      no detecta malware (un paquete malicioso sin CVE aparece limpio).
+    - **`fund=false`**: cosmético — suprime los mensajes de funding.
+      Sin impacto en seguridad.
+
+    ### Verificación conjunta
+
+    ```bash
+    npm config list | grep -E "ignore-scripts|min-release-age|allow-git|engine-strict"
+    # allow-git = "none"
+    # engine-strict = true
+    # ignore-scripts = true
+    # min-release-age = 3
+    ```
+
+---
+
+> **Próxima sesión:** continuar con los tests de `Loan` — devolución y
+> préstamo duplicado.
