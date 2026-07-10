@@ -27,24 +27,24 @@ No aprendas a usar IA para escribir código. Aprende a construir sistemas donde 
 
 | Stage | Nombre | Branch | Versión | Stack principal |
 |-------|--------|--------|---------|-----------------|
-| 1 | Foundations | `stage1-foundations` | v1.0 | Python 3.13, Pyright, Ruff, Pytest |
-| 2 | Persistence | `stage2-persistence` | v2.0 | SQLite, SQLAlchemy, Alembic |
-| 3 | Security Base | `stage3-security` | v3.0 | OWASP, Pydantic, secrets |
-| 4 | Pro Databases | `stage4-databases` | v4.0 | PostgreSQL, MongoDB |
-| 5 | Docker | `stage5-docker` | v5.0 | Docker, Docker Compose |
-| 6 | Cloud Basics | `stage6-cloud` | v6.0 | Railway / Render |
-| 7 | Microservices | `stage7-microservices` | v7.0 | FastAPI, Redis, RabbitMQ |
-| 8 | AI Service | `stage8-ai` | v8.0 | LLMs, RAG, pgvector |
-| 9 | Kubernetes | `stage9-k8s` | v9.0 | K8s, AWS EKS / GKE |
-| 10 | Infrastructure | `stage10-infra` | v10.0 | Terraform, Kafka |
-| 11 | Production | `stage11-production` | v11.0 | JWT, Prometheus, Grafana, LLMOps |
-| 12 | Agents | `stage12-agents` | v12.0 | LangGraph, Semantic Kernel |
+| 1 | Foundations | `stage1-tdd-from-scratch` | Stage 1 | Python 3.13, Pyright, Ruff, Pytest |
+| 2 | Persistence | `stage2-persistence` | Stage 2 | SQLite, SQLAlchemy, Alembic |
+| 3 | Security Base | `stage3-security` | Stage 3 | OWASP, Pydantic, secrets |
+| 4 | Pro Databases | `stage4-databases` | Stage 4 | PostgreSQL, MongoDB |
+| 5 | Docker | `stage5-docker` | Stage 5 | Docker, Docker Compose |
+| 6 | Cloud Basics | `stage6-cloud` | Stage 6 | Railway / Render |
+| 7 | Microservices | `stage7-microservices` | Stage 7 | FastAPI, Redis, RabbitMQ |
+| 8 | AI Service | `stage8-ai` | Stage 8 | LLMs, RAG, pgvector |
+| 9 | Kubernetes | `stage9-k8s` | Stage 9 | K8s, AWS EKS / GKE |
+| 10 | Infrastructure | `stage10-infra` | Stage 10 | Terraform, Kafka |
+| 11 | Production | `stage11-production` | Stage 11 | JWT, Prometheus, Grafana, LLMOps |
+| 12 | Agents | `stage12-agents` | Stage 12 | LangGraph, Semantic Kernel |
 
 ---
 
 ## Stage 1 · Foundations
 
-### `stage1-foundations` · v1.0
+### `stage1-tdd-from-scratch` · Stage 1
 
 **Objetivo:** Escribir código Python correcto, tipado, testeable y auditable por una IA.
 
@@ -103,7 +103,7 @@ def test_create_loan_fails_when_book_unavailable():
         service.create_loan(user_id=1, book_id=1)
 ```
 
-### Entregables
+### Criterios de compleción
 
 - [ ] API de biblioteca completa en memoria (sin base de datos)
 - [ ] Suite de tests con cobertura > 90% de la lógica de negocio
@@ -112,9 +112,8 @@ def test_create_loan_fails_when_book_unavailable():
 
 ### Cómo usar IA en esta stage
 
-- Pedile a la IA que genere tests, no código de producción
 - Cuando sugiera código, preguntá: *¿por qué este patrón y no otro?*
-- Usá la IA para revisar si tus tipos son consistentes
+- Usa la IA para revisar si tus tipos son consistentes
 - **No delegues el diseño de interfaces — eso es tuyo**
 
 ### Señal de que estás listo para Stage 2
@@ -125,7 +124,7 @@ Puedes cambiar la implementación de `LibraryRepository` completamente y tus tes
 
 ## Stage 2 · Persistence
 
-### `stage2-persistence` · v2.0
+### `stage2-persistence` · Stage 2
 
 **Objetivo:** Añadir persistencia a tu sistema sin que la lógica de negocio sepa que existe una base de datos.
 
@@ -172,7 +171,7 @@ def db_session():
         session.rollback()
 ```
 
-### Entregables
+### Criterios de compleción
 
 - [ ] Misma API de Stage 1, ahora persistida en SQLite
 - [ ] Migraciones con Alembic para todos los modelos
@@ -193,7 +192,7 @@ Cambias de SQLite a PostgreSQL cambiando una línea de configuración y tus test
 
 ## Stage 3 · Security Base
 
-### `stage3-security` · v3.0
+### `stage3-security` · Stage 3
 
 **Objetivo:** Que la seguridad sea un hábito, no una feature de última hora.
 
@@ -248,7 +247,7 @@ SECRET_KEY=supersecret123
 *.env
 ```
 
-### Entregables
+### Criterios de compleción
 
 - [ ] Revisión de toda la API contra OWASP API Top 10
 - [ ] Cero secretos en el código ni en el historial de git
@@ -269,7 +268,7 @@ Puedes recibir cualquier input de un usuario y demostrar por qué no puede rompe
 
 ## Stage 4 · Pro Databases
 
-### `stage4-databases` · v4.0
+### `stage4-databases` · Stage 4
 
 **Objetivo:** Entender cuándo usar qué base de datos y por qué.
 
@@ -288,13 +287,13 @@ Puedes recibir cualquier input de un usuario y demostrar por qué no puede rompe
 No es una guerra. Son herramientas para problemas diferentes.
 
 ```
-Usá PostgreSQL cuando:
+Usa PostgreSQL cuando:
   - Los datos tienen relaciones claras y estables
   - Necesitás transacciones ACID
   - Las queries son complejas (JOINs, agregaciones)
   - Ejemplo: préstamos, usuarios, libros con inventario
 
-Usá MongoDB cuando:
+Usa MongoDB cuando:
   - La estructura del documento varía entre registros
   - Necesitás flexibilidad de esquema
   - Escribes más de lo que leés
@@ -317,7 +316,7 @@ CREATE INDEX idx_loans_user_id ON loans(user_id);
 **Transacciones y consistencia**  
 Dos operaciones que deben ocurrir juntas o no ocurrir ninguna. El ejemplo clásico: crear un préstamo Y decrementar el stock del libro en la misma transacción.
 
-### Entregables
+### Criterios de compleción
 
 - [ ] API migrada de SQLite a PostgreSQL sin cambios en la lógica de negocio
 - [ ] Implementación de al menos un caso de uso con MongoDB
@@ -338,7 +337,7 @@ Puedes justificar por qué elegiste PostgreSQL o MongoDB para cada entidad de tu
 
 ## Stage 5 · Docker
 
-### `stage5-docker` · v5.0
+### `stage5-docker` · Stage 5
 
 **Objetivo:** Que tu aplicación corra igual en tu máquina, en la de tu colega, y en producción.
 
@@ -397,7 +396,7 @@ services:
       interval: 5s
 ```
 
-### Entregables
+### Criterios de compleción
 
 - [ ] API completa containerizada con multi-stage build
 - [ ] Docker Compose con API + PostgreSQL + Redis
@@ -418,7 +417,7 @@ services:
 
 ## Stage 6 · Cloud Basics
 
-### `stage6-cloud` · v6.0
+### `stage6-cloud` · Stage 6
 
 **Objetivo:** Ver tu API funcionando en producción real, aprender conceptos de nube sin la complejidad de Kubernetes.
 
@@ -491,7 +490,7 @@ jobs:
       - run: railway up
 ```
 
-### Entregables
+### Criterios de compleción
 
 - [ ] API de Stage 5 desplegada en Railway con base de datos real
 - [ ] Health check endpoint funcionando
@@ -512,7 +511,7 @@ Tienes una URL pública funcionando, con CI/CD automático, y entiendes qué ocu
 
 ## Stage 7 · Microservices
 
-### `stage7-microservices` · v7.0
+### `stage7-microservices` · Stage 7
 
 **Objetivo:** Dividir un sistema en servicios independientes que se comunican de forma asíncrona.
 
@@ -571,7 +570,7 @@ def test_get_user_contract(pact):
     ).will_respond_with(200, body={"id": 42, "email": "user@example.com"})
 ```
 
-### Entregables
+### Criterios de compleción
 
 - [ ] Sistema dividido en al menos 3 servicios: loans, users, notifications
 - [ ] Comunicación asíncrona via RabbitMQ para eventos de dominio
@@ -593,7 +592,7 @@ Puedes apagar un servicio y el resto del sistema sigue funcionando de forma degr
 
 ## Stage 8 · AI Service
 
-### `stage8-ai` · v8.0
+### `stage8-ai` · Stage 8
 
 **Objetivo:** Integrar IA como un microservicio más, con las mismas garantías de calidad que cualquier otro componente.
 
@@ -684,7 +683,7 @@ async def call_llm_with_observability(prompt: str) -> str:
             return await fallback_recommendation()
 ```
 
-### Entregables
+### Criterios de compleción
 
 - [ ] Servicio de búsqueda semántica con pgvector
 - [ ] Endpoint de recomendación que usa RAG
@@ -706,7 +705,7 @@ Tu AI Service puede caerse completamente y el resto del sistema sigue funcionand
 
 ## Stage 9 · Kubernetes
 
-### `stage9-k8s` · v9.0
+### `stage9-k8s` · Stage 9
 
 **Objetivo:** Entender cómo se gestiona un sistema distribuido a escala, con alta disponibilidad y despliegues sin downtime.
 
@@ -780,7 +779,7 @@ spec:
           averageUtilization: 70
 ```
 
-### Entregables
+### Criterios de compleción
 
 - [ ] Sistema de Stage 7 desplegado en EKS o GKE
 - [ ] Rolling update sin downtime demostrado
@@ -801,7 +800,7 @@ Puedes desplegar una nueva versión de un servicio sin que ningún usuario perci
 
 ## Stage 10 · Infrastructure as Code
 
-### `stage10-infra` · v10.0
+### `stage10-infra` · Stage 10
 
 **Objetivo:** Que toda la infraestructura sea código versionado, reproducible y auditado.
 
@@ -840,7 +839,7 @@ RabbitMQ (Stage 7) es excelente para colas de trabajo. Kafka es para cuando nece
 - Múltiples consumidores del mismo evento
 - Retención de eventos por días o semanas
 
-### Entregables
+### Criterios de compleción
 
 - [ ] Cluster de K8s creado y destruido completamente con Terraform
 - [ ] Al menos un caso de uso migrado de RabbitMQ a Kafka
@@ -854,7 +853,7 @@ Puedes recrear todo tu entorno de producción desde cero con un solo comando.
 
 ## Stage 11 · Production
 
-### `stage11-production` · v11.0
+### `stage11-production` · Stage 11
 
 **Objetivo:** Un sistema que sobrevive a fallos, es observable, y seguro en producción real.
 
@@ -899,7 +898,7 @@ METRICS = {
 }
 ```
 
-### Entregables
+### Criterios de compleción
 
 - [ ] Autenticación JWT completa con refresh tokens y revocación
 - [ ] Dashboard de Grafana con métricas de todos los servicios
@@ -915,7 +914,7 @@ Cuando algo falla en producción, sabes exactamente dónde falló, por qué, y c
 
 ## Stage 12 · Agents
 
-### `stage12-agents` · v12.0
+### `stage12-agents` · Stage 12
 
 **Objetivo:** Construir flujos donde la IA razona, toma decisiones y coordina herramientas de forma autónoma.
 
@@ -968,7 +967,7 @@ def check_loan_eligibility(user_id: int, book_id: int) -> EligibilityResult:
 **LLM-as-a-Judge**  
 Cuando el agente responde, ¿cómo sabes si la respuesta es correcta? Usas un modelo más potente para evaluar las respuestas del modelo más pequeño.
 
-### Entregables
+### Criterios de compleción
 
 - [ ] Agente que resuelve al menos 3 tipos de requests en lenguaje natural
 - [ ] Las herramientas del agente son los servicios de stages anteriores

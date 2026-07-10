@@ -7,7 +7,7 @@
 - **Name**: library-api — Library Management System
 - **Author**: Hector Gancedo Grade
 - **Language**: Python 3.13
-- **Current stage**: Stage 1 · Foundations (`stage1-inmemory`)
+- **Current stage**: Stage 1 · Foundations (`stage1-tdd-from-scratch`)
 - **Goal**: In-memory API, fully typed, tested, and lint-clean — no database yet
 - **Full roadmap**: `project_docs/ROADMAP_FINAL_2026.md`
 - **SDD config**: `openspec/config.yaml`
@@ -32,7 +32,7 @@ ruff check src/ && ruff format src/ && pyright
 
 ## File structure
 
-```
+```text
 src/
   app/
     models.py           # dataclass domain models + type aliases (TDD-driven)
@@ -65,7 +65,7 @@ pyrightconfig.json    # typeCheckingMode: strict, includes: [src]
 
 ## Exception hierarchy
 
-```
+```text
 LibraryApiError
 ├── BookError
 │   ├── BookNotFoundError
@@ -95,24 +95,26 @@ LibraryApiError
 
 5. **Session without a passing test**: if a full session ends without at least one new passing test that advances Stage 1 completion criteria, flag it.
 
+6. **Stale SDD artifact**: `openspec/config.yaml` must reflect the current state of the project — not aspirational architecture. If it lists source files that don't exist on disk, describes a stack that isn't installed, or references a different branch than `git branch --show-current`, flag it. A stale config wastes entire SDD phases because agents treat it as ground truth. Verify with: `ls src/app/*.py` vs `structure.source_files`, `python --version` vs `project.python_runtime`, `git branch --show-current` vs `project.current_branch`.
+
 **When I warn you**: stop writing docs/config immediately. Open the task that moves Stage 1 forward. If in doubt, the answer is always: write the next failing test.
 
 ## TDD rule — strict
 
-**RED → GREEN → TRIANGULATE → REFACTOR**
+**TDD rule — strict:** RED → GREEN → TRIANGULATE → REFACTOR
 
 No production code before a failing test. This is not negotiable in Stage 1.
 
 ## Known tech debt
 
-_None at the moment._
+- **Branch rename post-Stage 1**: al finalizar Stage 1, eliminar `stage1-inmemory` (local + remoto, 17 commits obsoleta) y renombrar `stage1-tdd-from-scratch` → `stage1-inmemory`. Actualizar referencias en `AGENTS.md`, `openspec/config.yaml`, `stage_summaries.md` y `ROADMAP_FINAL_2026.md`.
 
 ## Context loading policy
 
 This file is your complete context for **current stage work**. Do not load additional docs for routine tasks.
 
 | Situation | Load |
-|-----------|------|
+| ----------- | ------ |
 | Routine Stage 1 work (tests, lint, refactors, TD fixes) | Nothing — this file is enough |
 | Stage transition planning, "am I ready?", multi-stage questions | `project_docs/stage_summaries.md` |
 | Full concept explanations, code examples, deep design dive | `project_docs/ROADMAP_FINAL_2026.md` |
@@ -120,11 +122,12 @@ This file is your complete context for **current stage work**. Do not load addit
 
 ### When stages change
 
-If a stage is **added, removed, or modified**, update all three files — never just one:
+If a stage is **added, removed, or modified**, update all four files — never just one:
 
 1. `project_docs/ROADMAP_FINAL_2026.md` — full detail, source of truth
 2. `project_docs/stage_summaries.md` — compact map and per-stage card
 3. `AGENTS.md` — this file, if current stage identity, branch, or goal changed
+4. `openspec/config.yaml` — SDD ground truth: branch, stack, structure, domain
 
 ## SDD preferences
 

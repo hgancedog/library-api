@@ -2776,3 +2776,45 @@ memoria (Engram) bajo `config/pi-subagents`.
 
 > **Próxima sesión:** continuar con los tests de `Loan` — devolución y
 > préstamo duplicado.
+
+---
+
+## Apéndice F — Fuentes de verdad del proyecto
+
+El proyecto tiene dos archivos que funcionan como fuentes de verdad, con roles
+claramente distintos:
+
+| Archivo | Rol | ¿Qué contiene? |
+|---|---|---|
+| `AGENTS.md` | **Manual de vuelo** | Reglas, convenciones, comandos, anti-patrones, TDD |
+| `openspec/config.yaml` | **Radiografía del presente** | Lo que EXISTE ahora en disco: archivos, stack, tests, dominio |
+
+`AGENTS.md` te dice **cómo trabajar**. `config.yaml` te dice **qué hay construido**.
+
+### Ciclo de vida de `config.yaml`
+
+```
+Proyecto nuevo
+     │
+     ▼
+sdd-init ─────→ Crea openspec/config.yaml
+                 (el agente lo genera desde cero)
+     │
+     ▼
+Cada sesión: el agente LEE el archivo (no lo carga en contexto automáticamente)
+     │
+     ▼
+Cada cambio en disco: el agente (o vos) ACTUALIZA el archivo
+                      (nuevos archivos, tests, entidades)
+     │
+     ▼
+Entre sesiones: PERSISTE en disco, nunca se pierde
+```
+
+### Regla de oro
+
+`config.yaml` describe solo el **presente** (Stage 1, lo que existe en disco).
+El futuro (Stages 2-12) vive exclusivamente en `ROADMAP_FINAL_2026.md`.
+Duplicar datos del roadmap en `config.yaml` garantiza que se desactualicen
+(stale artifact). La sección `roadmap` de `config.yaml` contiene solo un
+puntero al archivo canónico.
