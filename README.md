@@ -12,7 +12,7 @@ The project is organized into sequential stages. Each stage is hosted in its own
 
 | Stage                     | Branch                 | Key Technologies                    |
 | :------------------------ | :--------------------- | :---------------------------------- |
-| **1. Foundations**        | `stage1-inmemory`      | Python 3.13, Pyright, Ruff, Pytest  |
+| **1. Foundations**        | `stage1-tdd-from-scratch` | Python 3.14, Pyright, Ruff, Pytest |
 | **2. Persistence**        | `stage2-sqlite`        | SQLite, SQLAlchemy, Alembic         |
 | **3. Security Base**      | `stage3-postgres`      | OWASP, Pydantic v2, Bandit          |
 | **4. Pro Databases**      | `stage4-docker`        | PostgreSQL, MongoDB, Redis          |
@@ -32,7 +32,7 @@ The project is organized into sequential stages. Each stage is hosted in its own
 
 ## 🛠️ Global Tech Stack
 
-**Language:** Python 3.13
+**Language:** Python 3.14
 **Framework:** FastAPI
 **Databases:** PostgreSQL, MongoDB, SQLite, Redis
 **Type Checking:** Pyright (strict mode)
@@ -47,12 +47,14 @@ The project is organized into sequential stages. Each stage is hosted in its own
 
 ## 📖 How to navigate this project
 
-1.  **Main Branch:** This README serves as the project index and roadmap.
-2.  **Specific Stages:** Switch to a specific branch to see the implementation:
+1. **Main Branch:** This README serves as the project index and roadmap.
+2. **Specific Stages:** Switch to a specific branch to see the implementation:
+
     ```bash
-    git checkout stage1-inmemory
+    git checkout stage1-tdd-from-scratch
     ```
-3.  **Documentation:** Detailed stage specifications live in [`project_docs/ROADMAP_FINAL_2026.md`](project_docs/ROADMAP_FINAL_2026.md) and [`openspec/config.yaml`](openspec/config.yaml).
+
+3. **Documentation:** Detailed stage specifications live in [`project_docs/ROADMAP_FINAL_2026.md`](project_docs/ROADMAP_FINAL_2026.md) and [`openspec/config.yaml`](openspec/config.yaml).
 
 ---
 
