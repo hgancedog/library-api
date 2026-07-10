@@ -8,7 +8,7 @@
 Middle layer between `AGENTS.md` (always loaded) and the full roadmap (rarely loaded).
 
 | Load when… | File |
-|------------|------|
+| ------------ | ------ |
 | Routine Stage 1 work | `AGENTS.md` — already in context |
 | Stage transition planning, "am I ready?", multi-stage questions | **This file** |
 | Full concept explanations, code examples, deep design | `ROADMAP_FINAL_2026.md` |
@@ -28,7 +28,7 @@ Never update only one of the three files.
 ## Stage map
 
 | # | Name | Branch | Status | Stack highlights |
-|---|------|--------|--------|-----------------|
+| --- | ------ | -------- | -------- | ----------------- |
 | 1 | Foundations | `stage1-tdd-from-scratch` | **in_progress** | Python 3.14, Pyright strict, Ruff, Pytest |
 | 2 | Persistence | `stage2-persistence` | pending | SQLite → PostgreSQL, SQLAlchemy, Alembic |
 | 3 | Security Base | `stage3-security` | pending | Pydantic v2, OWASP, Bandit, secrets |
@@ -318,7 +318,7 @@ Never update only one of the three files.
 ## Cross-cutting security thread
 
 | Stage | Security action |
-|-------|----------------|
+| ------- | ---------------- |
 | 1 | Strict types — no ambiguous data |
 | 2 | Migrations reviewed — no accidental data destruction |
 | 3 | OWASP, input validation, secrets out of code |
