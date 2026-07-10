@@ -44,7 +44,7 @@ Never update only one of the three files.
 
 ---
 
-## Stage 1 · Foundations — `stage1-tdd-from-scratch` · Stage 1
+## Stage 1 · Foundations — `stage1-tdd-from-scratch`
 
 **Status**: in_progress  
 **Objective**: In-memory API — fully typed, tested, lint-clean. No database.
@@ -69,7 +69,7 @@ Never update only one of the three files.
 
 ---
 
-## Stage 2 · Persistence — `stage2-persistence` · v2.0
+## Stage 2 · Persistence — `stage2-persistence`
 
 **Status**: pending  
 **Objective**: Add persistence without leaking the database into business logic.
@@ -91,7 +91,7 @@ Never update only one of the three files.
 
 ---
 
-## Stage 3 · Security Base — `stage3-security` · v3.0
+## Stage 3 · Security Base — `stage3-security`
 
 **Status**: pending  
 **Objective**: Security as a habit, not a last-minute feature.
@@ -114,7 +114,7 @@ Never update only one of the three files.
 
 ---
 
-## Stage 4 · Pro Databases — `stage4-databases` · v4.0
+## Stage 4 · Pro Databases — `stage4-databases`
 
 **Status**: pending  
 **Objective**: Know when to use which database and why — and prove it.
@@ -136,7 +136,7 @@ Never update only one of the three files.
 
 ---
 
-## Stage 5 · Docker — `stage5-docker` · v5.0
+## Stage 5 · Docker — `stage5-docker`
 
 **Status**: pending  
 **Objective**: Same behavior in dev, colleague's machine, and production.
@@ -158,7 +158,7 @@ Never update only one of the three files.
 
 ---
 
-## Stage 6 · Cloud Basics — `stage6-cloud` · v6.0
+## Stage 6 · Cloud Basics — `stage6-cloud`
 
 **Status**: pending  
 **Objective**: Real production URL. Understand what breaks in the cloud before K8s complexity.
@@ -182,7 +182,7 @@ Never update only one of the three files.
 
 ---
 
-## Stage 7 · Microservices — `stage7-microservices` · v7.0
+## Stage 7 · Microservices — `stage7-microservices`
 
 **Status**: pending  
 **Objective**: Independent services that communicate asynchronously and degrade gracefully.
@@ -205,7 +205,7 @@ Never update only one of the three files.
 
 ---
 
-## Stage 8 · AI Service — `stage8-ai` · v8.0
+## Stage 8 · AI Service — `stage8-ai`
 
 **Status**: pending  
 **Objective**: AI as a microservice with the same quality guarantees as any other component.
@@ -227,7 +227,7 @@ Never update only one of the three files.
 
 ---
 
-## Stage 9 · Kubernetes — `stage9-k8s` · v9.0
+## Stage 9 · Kubernetes — `stage9-k8s`
 
 **Status**: pending  
 **Objective**: Manage a distributed system at scale with zero-downtime deployments.
@@ -249,7 +249,7 @@ Never update only one of the three files.
 
 ---
 
-## Stage 10 · Infrastructure as Code — `stage10-infra` · v10.0
+## Stage 10 · Infrastructure as Code — `stage10-infra`
 
 **Status**: pending  
 **Objective**: All infrastructure is versioned code — reproducible and auditable.
@@ -271,7 +271,7 @@ Never update only one of the three files.
 
 ---
 
-## Stage 11 · Production — `stage11-production` · v11.0
+## Stage 11 · Production — `stage11-production`
 
 **Status**: pending  
 **Objective**: A system that survives failure, is observable, and is secure in real production.
@@ -293,7 +293,7 @@ Never update only one of the three files.
 
 ---
 
-## Stage 12 · Agents — `stage12-agents` · v12.0
+## Stage 12 · Agents — `stage12-agents`
 
 **Status**: pending  
 **Objective**: AI that reasons, decides, and coordinates tools autonomously over the infrastructure built in stages 1–11.
