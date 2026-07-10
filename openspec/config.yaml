@@ -237,6 +237,16 @@ tech_debt:
     severity: minor
     stage_to_fix: 2
 
+  - id: TD-006
+    file: src/app/models.py
+    description: >
+      Docstrings missing on entitites (Book, User, Loan, Email), public methods
+      (can_be_loaned, mark_as_loaned), the due_date property, and type aliases
+      (BookID, UserID, LoanID). Exceptions already have docstrings. Add before
+      Stage 1 merge to main — required for AI-auditable code and portfolio quality.
+    severity: minor
+    stage_to_fix: 1
+
 # ──────────────────────────────────────────────────────────────
 # SDD CONFIGURATION
 # ──────────────────────────────────────────────────────────────

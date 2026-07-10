@@ -108,6 +108,7 @@ No production code before a failing test. This is not negotiable in Stage 1.
 ## Known tech debt
 
 - **Branch rename post-Stage 1**: al finalizar Stage 1, eliminar `stage1-inmemory` (local + remoto, 17 commits obsoleta) y renombrar `stage1-tdd-from-scratch` → `stage1-inmemory`. Actualizar referencias en `AGENTS.md`, `openspec/config.yaml`, `stage_summaries.md` y `ROADMAP_FINAL_2026.md`.
+- **Docstrings pendientes**: `models.py` tiene docstrings en las excepciones pero no en entidades (`Book`, `User`, `Loan`, `Email`), métodos públicos (`can_be_loaned`, `mark_as_loaned`, `due_date`), ni type aliases (`BookID`, `UserID`, `LoanID`). Añadir al finalizar Stage 1 para que el código sea auditable por IA y profesional para portfolio.
 
 ## Context loading policy
 
