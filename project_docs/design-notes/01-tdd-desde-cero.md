@@ -3022,9 +3022,122 @@ lado. El Apéndice F es el lugar canónico para documentar fuentes de verdad.
 - **Próximo paso**: cerrar TD-006 (docstrings) y verificar criterios de
   compleción de Stage 1
 
----
+    ---
 
-## Apéndice F — Fuentes de verdad del proyecto
+  ## Sesión 7 — Gate de precedencia para el integrity check
+
+    > Fecha: 11 julio 2026
+
+    Sesión de corrección de un fallo en el mecanismo de control de la Sesión 6:
+    el integrity check no se estaba ejecutando automáticamente al iniciar `pi`.
+
+  ### Decisión 7.1 — El integrity check necesita un gate de precedencia, no una instrucción temporal
+
+  **Qué:** se ajustó la redacción del integrity check en `AGENTS.md` para
+  convertirlo en una regla de precedencia dura, y se documentó por qué la
+  redacción anterior no garantizaba su ejecución automática.
+
+  **Por qué:** cuando ejecutas `pi` en el directorio del proyecto, el harness
+  construye el system prompt con `AGENTS.md`, Engram carga la memoria de sesiones
+  pasadas, y Gentle Pi configura el contrato SDD. Pero el agente no se activa
+  hasta que escribes en la TUI. El integrity check estaba redactado como «At the
+  start of every session, before any work begins», lo que sugiere que ocurre al
+  abrir `pi`. No es así: ocurre en el primer turno, y solo si el agente lo
+  prioriza sobre lo que hayas escrito. Si tu primer mensaje es «añade un test»,
+  el agente tiene dos instrucciones en su prompt —verificar y escribir el test—
+  y sin una regla explícita de precedencia, puede saltarse el check y atender
+  directamente tu petición. La redacción nueva elimina esta ambigüedad: el check
+  va primero siempre, sin importar lo que escribas.
+
+  **Dónde:** `AGENTS.md` — sección «Session startup — config.yaml integrity
+  check».
+
+  **Aprendido:**
+
+  - Pi no tiene un bucle autónomo ni un scheduler. El agente solo actúa cuando
+    escribes en la TUI. No hay actividad entre que el proceso arranca y tu primer
+    mensaje.
+  - Engram recuerda decisiones y contexto, pero no puede disparar acciones. El
+    agente consulta memoria en respuesta a tu input, no por iniciativa propia.
+  - Las reglas en `AGENTS.md` se evalúan en cada turno, pero compiten con tu
+    petición. Si la regla dice «al inicio» o «antes de», pero no establece
+    precedencia explícita, el agente puede decidir atender tu petición primero.
+  - Solución: redactar como gate — «regardless of what the user's first message
+    asks, run this check before addressing their request».
+
+  **Corrección adicional:** se detectó que `AGENTS.md` declaraba Python 3.13,
+  pero el sistema y `config.yaml` ya usaban 3.14.4. Se corrigió a 3.14.
+
+  ### Decisión 7.2 — Con la nueva redacción, cualquier prompt dispara el check
+
+  Con la nueva redacción en el `AGENTS.md`, **cualquier prompt** sirve. No
+  necesitas uno especial. Puedes arrancar directo con «añade un test para
+  devolver libro» o «revisa el modelo de Loan» y el integrity check se ejecutará
+  primero de todas formas.
+
+  Ese es justo el punto de convertirlo en un gate de precedencia dura: que no
+  tengas que recordar dispararlo manualmente ni usar un prompt de inicio
+  específico.
+
+  Antes —con la redacción anterior— el escenario ideal era que tu primer mensaje
+  fuera algo genérico como «hola» o «empecemos» para dar espacio a que el check
+  ocurriera sin competencia. Pero eso es frágil y depende de que lo recuerdes. La
+  corrección lo vuelve innecesario.
+
+  ### Decisión 7.3 — Solo el integrity check necesita gate; el resto del AGENTS.md es contexto pasivo
+
+  El `AGENTS.md` tiene dos tipos de contenido y solo uno necesita el gate.
+
+  **Contexto pasivo** — se aplica solo, sin acción:
+
+  - Convenciones de código (`dataclass`, `snake_case`, `X | None`)
+  - Regla TDD estricta
+  - Jerarquía de excepciones
+  - Comandos del proyecto
+  - Idioma (inglés para código, español neutro para conversación)
+  - Política de carga de docs («para X carga Y»)
+
+  Todo esto está en el system prompt. El agente no necesita «ejecutarlo» —
+  simplemente condiciona cada respuesta. Si pides un test, el agente ya sabe que
+  debe ser inglés, con dataclasses, siguiendo TDD. No hay decisión que tomar.
+
+  **Acción proactiva** — requiere invocar herramientas:
+
+  - Integrity check: ejecutar `git rev-parse`, `pytest`, `python --version`,
+    `git branch`, `ls`, leer `config.yaml`, comparar, corregir.
+
+  Esta es la única instrucción del `AGENTS.md` que exige que el agente haga algo
+  por iniciativa propia en un momento concreto (primer turno). Las demás son
+  restricciones que se aplican pasivamente.
+
+  Los anti-patrones (punto 6) son un caso intermedio: son condicionales. No
+  necesitan gate de primer turno porque se disparan cuando el agente detecta el
+  patrón durante el trabajo, no al inicio.
+
+  Así que no, no es necesario extender el mandatory first a todo el `AGENTS.md`.
+  Solo a las instrucciones que requieren acción proactiva en un momento
+  específico, y de momento solo hay una: el integrity check.
+
+  ### Lo que NO puede hacer el agente
+
+    Esta sesión dejó claro el modelo real de ejecución de Pi + Gentle Pi:
+
+  - Pi no tiene un bucle autónomo ni un scheduler. El agente solo actúa cuando
+      el usuario escribe en la TUI.
+  - Engram recuerda decisiones y contexto entre sesiones, pero no puede disparar
+      acciones. El agente consulta memoria en respuesta al input, no por iniciativa
+      propia.
+  - Los subagentes se invocan durante un turno, no antes.
+  - Las instrucciones en `AGENTS.md` se evalúan en cada turno, pero compiten en
+      igualdad de condiciones con la petición explícita del usuario.
+
+    Esto no es una limitación que haya que resolver con más tooling. Es la
+    arquitectura del sistema. La disciplina está en cómo se redactan las reglas
+    para que funcionen dentro de esta arquitectura.
+
+    ---
+
+  ## Apéndice F — Fuentes de verdad del proyecto
 
 El proyecto tiene dos archivos que funcionan como fuentes de verdad, con roles
 claramente distintos:

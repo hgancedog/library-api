@@ -29,7 +29,7 @@ project:
   current_stage: 1
   current_stage_name: Foundations
   current_branch: stage1-tdd-from-scratch # verified: git branch --show-current
-  git_head: 1e6ca63 # verified: git rev-parse --short HEAD
+  git_head: 30e0a5d # verified: git rev-parse --short HEAD
 
   roadmap_file: project_docs/ROADMAP_FINAL_2026.md
   stage_summaries: project_docs/stage_summaries.md

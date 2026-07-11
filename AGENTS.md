@@ -6,7 +6,7 @@
 
 - **Name**: library-api — Library Management System
 - **Author**: Hector Gancedo Grade
-- **Language**: Python 3.13
+- **Language**: Python 3.14
 - **Current stage**: Stage 1 · Foundations (`stage1-tdd-from-scratch`)
 - **Goal**: In-memory API, fully typed, tested, and lint-clean — no database yet
 - **Full roadmap**: `project_docs/ROADMAP_FINAL_2026.md`
@@ -83,9 +83,13 @@ LibraryApiError
 
 ## Session startup — config.yaml integrity check
 
-**At the start of every session, before any work begins**, verify that
-`openspec/config.yaml` matches the actual state on disk. If any field is
-stale, update it before proceeding — a stale config wastes entire SDD
+**Mandatory first action**: on the first user message of any session —
+regardless of what the user asked — run the integrity check below before
+addressing their request. The agent is reactive (requires a user message to
+trigger) but this check takes precedence over all other work.
+
+Verify that `openspec/config.yaml` matches the actual state on disk. If any
+field is stale, update it before proceeding — a stale config wastes entire SDD
 phases because agents and subagents treat it as ground truth.
 
 ```bash
