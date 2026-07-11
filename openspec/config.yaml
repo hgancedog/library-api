@@ -29,7 +29,7 @@ project:
   current_stage: 1
   current_stage_name: Foundations
   current_branch: stage1-tdd-from-scratch # verified: git branch --show-current
-  git_head: 02e4f0f # verified: git rev-parse --short HEAD
+  git_head: 1e6ca63 # verified: git rev-parse --short HEAD
 
   roadmap_file: project_docs/ROADMAP_FINAL_2026.md
   stage_summaries: project_docs/stage_summaries.md
@@ -92,7 +92,7 @@ structure:
 
   source_files:
     - src/app/__init__.py # empty (0 lines)
-    - src/app/models.py # domain models, exceptions, Email VO, type aliases (84 lines)
+    - src/app/models.py # domain models, exceptions, Email VO, type aliases (105 lines)
 
   test_files:
     - src/tests/test_book.py # Book creation + availability logic (5 tests)
@@ -116,7 +116,7 @@ structure:
     - src/app/.atl/skill-registry.md # app-level (present but empty/legacy)
 
 # ──────────────────────────────────────────────────────────────
-# DOMAIN MODEL — ACTUAL (from src/app/models.py, 84 lines)
+# DOMAIN MODEL — ACTUAL (from src/app/models.py, 106 lines)
 # ──────────────────────────────────────────────────────────────
 domain:
   type_aliases:
@@ -127,14 +127,16 @@ domain:
   exceptions:
     hierarchy:
       LibraryApiError: # base exception
-        - BookError # no sub-subclasses
+        - BookError
+          - BookAlreadyLoanedError
+          - BookNotLoanedError
         - UserError
         - LoanError
     file: src/app/models.py
     note: >
-      Hierarchy is currently flat (4 classes). BookNotFoundError and
-      BookAlreadyLoanedError do NOT exist yet — they will be added when
-      repository/service layers are built.
+      Hierarchy: 6 classes. BookError has two subclasses
+      (BookAlreadyLoanedError, BookNotLoanedError). UserError and LoanError
+      remain flat. See models.py lines 10-31 for full hierarchy.
 
   value_objects:
     - name: Email
@@ -149,7 +151,7 @@ domain:
       fields: [title, author, is_available, book_id]
       id_field: "book_id: BookID | None"
       invariants: title and author must be non-empty (validated in __post_init__)
-      behavior: [can_be_loaned, mark_as_loaned]
+      behavior: [can_be_loaned, mark_as_loaned, mark_as_returned]
 
     - name: User
       kind: dataclass
@@ -164,6 +166,7 @@ domain:
       id_field: "loan_id: LoanID | None"
       invariants: return_date cannot be earlier than loan_date
       computed: due_date property = loan_date + 30 days
+      behavior: [is_active, mark_as_returned]
 
 # ──────────────────────────────────────────────────────────────
 # CODE CONVENTIONS
@@ -198,14 +201,14 @@ conventions:
 # CURRENT TEST STATUS
 # ──────────────────────────────────────────────────────────────
 test_status:
-  total_tests: 12
-  passing: 12
+  total_tests: 17
+  passing: 17
   failing: 0
   coverage_percent: 100
   covered_module: src/app/models.py
   pyright_errors: 0
   ruff_warnings: 0
-  last_verified: "2026-07-10"
+  last_verified: "2026-07-11"
 
 # ──────────────────────────────────────────────────────────────
 # KNOWN TECH DEBT — STAGE 1

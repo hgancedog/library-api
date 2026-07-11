@@ -81,6 +81,32 @@ LibraryApiError
 - Ruff — zero warnings
 - Test coverage > 90% on business logic
 
+## Session startup — config.yaml integrity check
+
+**At the start of every session, before any work begins**, verify that
+`openspec/config.yaml` matches the actual state on disk. If any field is
+stale, update it before proceeding — a stale config wastes entire SDD
+phases because agents and subagents treat it as ground truth.
+
+```bash
+# Run these 5 checks in one pass:
+git rev-parse --short HEAD          # vs project.git_head
+pytest src/tests/ -q --tb=no        # vs test_status.total_tests
+python --version                    # vs project.python_runtime
+git branch --show-current           # vs project.current_branch
+ls src/app/*.py                     # vs structure.source_files
+```
+
+Also verify:
+
+- `test_status.coverage_percent` — run `pytest --cov=src/app --cov-report=term-missing`
+- `test_status.last_verified` — update to today's date
+- `domain.entities[*].behavior` — check for new methods added since last sync
+- `domain.exceptions.hierarchy` — check for new exception classes
+
+This is NOT optional. The cost of a stale config is the cost of an entire
+SDD session built on false assumptions.
+
 ## Productivity guard — anti-pattern detection
 
 **If you detect any of these patterns, warn me immediately and suggest a course correction:**

@@ -2923,11 +2923,104 @@ No hay inconsistencia — hay modelado fiel al dominio.
 | 3. Positivo de creación | ✅ | ✅ | ✅ |
 | 4. Consulta de estado | `can_be_loaned()` ✅ | No aplica | `due_date` ✅ |
 | 5. Transiciones | `mark_as_loaned()`, `mark_as_returned()` ✅ | No aplica | `is_active()`, `mark_as_returned()` ✅ |
-| 6. Casos límite | **Falta** (`BookAlreadyLoanedError`) | No aplica | `return_date < loan_date` ✅ |
+| 6. Casos límite | `BookAlreadyLoanedError`, `BookNotLoanedError` ✅ | No aplica | `return_date < loan_date` ✅ |
 
-> **Próxima sesión:** casos límite de `Book` — `BookAlreadyLoanedError` al
-> intentar `mark_as_loaned()` sobre un libro ya prestado, y el simétrico al
-> intentar `mark_as_returned()` sobre uno disponible.
+> **Próxima sesión:** Stage 1 completion criteria — verificar cobertura >90%,
+> pyright strict zero errors, Ruff zero warnings, y documentar docstrings
+> pendientes (TD-006).
+
+---
+
+## Sesión 6 — Integridad del SDD artifact y mecanismos de control
+
+> Fecha: 11 julio 2026
+
+Sesión de proceso y documentación. El foco fue cerrar un bucle de control que
+quedó abierto desde Sesión 1: ¿cómo garantizamos que `openspec/config.yaml`
+—la fuente de verdad que todos los agentes consultan— no se desactualiza?
+
+### Decisión 6.1 — Session startup integrity check en AGENTS.md
+
+**Qué:** se añadió una nueva sección en `AGENTS.md` (`Session startup — config.yaml
+integrity check`) que obliga a verificar 5 campos de `config.yaml` contra la
+realidad del disco **al inicio de cada sesión**, antes de cualquier trabajo.
+
+**Por qué:** `AGENTS.md` se inyecta en el system prompt al iniciar cada sesión.
+Es el lugar natural para una regla proactiva. El anti-patrón #6 ya detectaba
+el problema (stale artifact) pero era reactivo — solo se activaba si la IA
+"olía" inconsistencia. La nueva regla cierra el bucle: **verificación
+obligatoria al inicio** + **detección reactiva durante la sesión**.
+
+**Campos verificados:**
+
+```bash
+git rev-parse --short HEAD          # vs project.git_head
+pytest src/tests/ -q --tb=no        # vs test_status.total_tests
+python --version                    # vs project.python_runtime
+git branch --show-current           # vs project.current_branch
+ls src/app/*.py                     # vs structure.source_files
+```
+
+También se verifican `test_status.coverage_percent`,
+`test_status.last_verified`, `domain.entities[*].behavior`, y
+`domain.exceptions.hierarchy`.
+
+### Decisión 6.2 — El integrity check en AGENTS.md es suficiente; no se necesita tooling adicional
+
+**Qué:** se descartaron mecanismos externos (pre-commit hook, CI check, script
+`sync-config`) porque el session startup integrity check en `AGENTS.md` ya
+cubre la necesidad: el agente ejecuta la verificación automáticamente al
+inicio de cada sesión, sin intervención humana.
+
+**Por qué:** añadir hooks o scripts sería redundante — un segundo portero en
+una puerta que ya tiene uno. Con 2 archivos fuente y 17 tests, el check tarda
+30 segundos. Si en stages futuros el archivo crece y el check se vuelve lento,
+se reconsiderará.
+
+### Correcciones aplicadas en esta sesión
+
+Se detectaron 6 campos stale en `config.yaml` que nadie había notado porque
+nunca se verificaban explícitamente:
+
+| Campo | Antes | Ahora |
+|---|---|---|
+| `git_head` | `02e4f0f` | `1e6ca63` |
+| `total_tests` | `12` | `17` |
+| `passing` | `12` | `17` |
+| `last_verified` | `2026-07-10` | `2026-07-11` |
+| `models.py` line count | 84 | 106 |
+| `domain.exceptions.hierarchy` | 4 clases planas | 6 clases con subclases reales |
+| `domain.entities[0].behavior` (Book) | `[can_be_loaned, mark_as_loaned]` | + `mark_as_returned` |
+| `domain.entities[2].behavior` (Loan) | (no existía) | `[is_active, mark_as_returned]` |
+
+### Corrección retrospectiva: Sesión 5
+
+La tabla de progreso de Sesión 5 marcaba los casos límite de Book como
+"Falta", cuando en realidad ya estaban implementados y commiteados en esa
+misma sesión (`BookAlreadyLoanedError`, `BookNotLoanedError` con sus tests
+`test_cannot_mark_as_loaned_twice` y `test_cannot_mark_as_returned_when_available`).
+Se corrigió la tabla para reflejar ✅.
+
+### Decisión 6.3 — Apéndice F ampliado
+
+**Qué:** se expandió el Apéndice F con la explicación detallada de los tres
+propósitos de `config.yaml` (ground truth para IA, verificación de honestidad
+para el humano, configuración del flujo SDD) y la tabla de "quién usa qué".
+
+**Por qué:** la información existía dispersa entre `AGENTS.md` (anti-patrón #6)
+y el propio `config.yaml` (comentarios), pero no estaba consolidada en ningún
+lado. El Apéndice F es el lugar canónico para documentar fuentes de verdad.
+
+### Estado actual del proyecto (fin Sesión 6)
+
+- **17 tests / 17 passing** · 100% cobertura en `models.py`
+- **Pyright strict**: 0 errores, 0 warnings
+- **Ruff**: 0 warnings
+- **Exceptions**: 6 clases con jerarquía (`BookError` → subclases)
+- **Entity methods**: `Book` (4), `User` (1), `Loan` (5)
+- **Deuda técnica activa**: TD-003, TD-004, TD-005, TD-006
+- **Próximo paso**: cerrar TD-006 (docstrings) y verificar criterios de
+  compleción de Stage 1
 
 ---
 
@@ -2943,6 +3036,70 @@ claramente distintos:
 
 `AGENTS.md` te dice **cómo trabajar**. `config.yaml` te dice **qué hay construido**.
 
+---
+
+### ¿Para qué se usa `openspec/config.yaml`?
+
+**No es de uso exclusivo de la IA.** Es un artefacto compartido con tres
+propósitos:
+
+#### 1. Ground truth para los agentes de IA
+
+Pi, los subagentes y las fases SDD leen `config.yaml` para saber el estado
+real del proyecto sin tener que escanear el disco en cada sesión. Sustituye
+decenas de comandos exploratorios (`ls`, `git branch`, `cat pyproject.toml`,
+`pytest --co`, etc.) por una lectura única y determinista.
+
+Ejemplos concretos de lo que la IA consulta aquí:
+
+- `structure.source_files` → qué archivos de producción existen
+- `project.python_runtime` → versión exacta de Python en el venv
+- `project.current_branch` → branch activo (verificado con `git branch --show-current`)
+- `commands.test` → cómo ejecutar los tests correctamente
+- `conventions.quote_style` → comillas dobles, no simples
+- `conventions.line_length` → 88 columnas (Ruff)
+- `test_status` → cuántos tests hay, cuántos pasan, cobertura actual
+- `domain.entities` → qué entidades existen, sus campos e invariantes
+- `stack` → qué herramientas están instaladas, versiones y estado
+
+#### 2. Verificación de honestidad para el humano
+
+El anti-patrón #6 de `AGENTS.md` (`Stale SDD artifact`) convierte a
+`config.yaml` en un mecanismo de auditoría: **tú puedes leerlo y verificar
+que lo que dice coincide con la realidad.**
+
+Si el archivo lista `src/app/models.py` pero ese archivo no existe en disco,
+o dice `python_runtime: "3.14.4"` cuando el venv tiene otra versión, o
+referencia un branch que no es el actual → el archivo miente y hay que
+corregirlo. Esto te da control sobre lo que la IA cree del proyecto.
+
+#### 3. Configuración del flujo SDD
+
+La sección `sdd:` controla cómo Pi ejecuta las fases del ciclo
+specification-driven:
+
+- `execution_mode: interactive` → pausa entre fases, pide confirmación
+- `approval_keywords: ["continue", "dale", "go on", "next"]` → palabras
+  que el humano usa para autorizar el avance a la siguiente fase
+- `artifact_store: both` → los artefactos se guardan en archivos OpenSpec
+  y también en memoria Engram
+- `review_budget_lines: 200` → umbral a partir del cual un PR se considera
+  grande y dispara el flujo de revisión 4R
+- `phase_gate: one_at_a_time` → solo una fase SDD activa por vez
+
+#### Tabla resumen: quién usa qué
+
+| ¿Quién lo usa? | ¿Para qué? |
+|---|---|
+| **IA** (Pi, subagentes, fases SDD) | Saber el estado real del proyecto sin escanear el disco |
+| **Humano** (tú) | Verificar que la IA no está trabajando con datos falsos (anti-patrón #6) |
+| **Flujo SDD** | Controlar cómo se ejecutan las fases de diseño/implementación |
+
+No es "el archivo de la IA". Es **el contrato compartido entre el humano y la
+IA sobre cómo es el proyecto ahora mismo**.
+
+---
+
 ### Ciclo de vida de `config.yaml`
 
 ```
@@ -2953,7 +3110,10 @@ sdd-init ─────→ Crea openspec/config.yaml
                  (el agente lo genera desde cero)
      │
      ▼
-Cada sesión: el agente LEE el archivo (no lo carga en contexto automáticamente)
+Cada sesión: el agente LEE el archivo y EJECUTA el
+             session startup integrity check (AGENTS.md)
+             → verifica 5 campos contra la realidad del disco
+             → corrige discrepancias antes de empezar a trabajar
      │
      ▼
 Cada cambio en disco: el agente (o vos) ACTUALIZA el archivo
