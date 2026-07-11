@@ -15,6 +15,14 @@ class BookError(LibraryApiError):
     """Raised for general book-related failures."""
 
 
+class BookAlreadyLoanedError(BookError):
+    """Raised when attempting to loan a book that is already out."""
+
+
+class BookNotLoanedError(BookError):
+    """Raised when attempting to return a book that is not loaned."""
+
+
 class UserError(LibraryApiError):
     """Raised for general user-related failures."""
 
@@ -52,11 +60,22 @@ class Book:
     def can_be_loaned(self) -> bool:
         return self.is_available
 
+    def mark_as_loaned(self):
+        if not self.is_available:
+            raise BookAlreadyLoanedError(f"Book '{self.title}' is already loaned")
+        self.is_available = False
+
+    def mark_as_returned(self):
+        if self.is_available:
+            raise BookNotLoanedError(f"Book '{self.title}' is not currently loaned")
+        self.is_available = True
+
 
 @dataclass
 class User:
     username: str
     email: Email
+    user_id: UserID | None = None
 
     def __post_init__(self):
         if not self.username or not self.username.strip():
@@ -74,6 +93,12 @@ class Loan:
     def __post_init__(self):
         if self.return_date is not None and self.return_date < self.loan_date:
             raise LoanError("return_date cannot be earlier than loan_date")
+
+    def is_active(self) -> bool:
+        return self.return_date is None
+
+    def mark_as_returned(self, return_date: date | None = None):
+        self.return_date = return_date if return_date is not None else date.today()
 
     @property
     def due_date(self) -> date:

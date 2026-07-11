@@ -2774,8 +2774,160 @@ memoria (Engram) bajo `config/pi-subagents`.
 
 ---
 
-> **Próxima sesión:** continuar con los tests de `Loan` — devolución y
-> préstamo duplicado.
+---
+
+## Sesión 5 — Cambios de estado: Book y Loan
+
+> Fecha: 10 julio 2026
+
+Completamos los métodos de transición de estado que faltaban tanto en `Book`
+como en `Loan`. La sesión alternó entre implementación guiada por el usuario
+y discusiones de diseño sobre valores de retorno, parámetros opcionales y
+consistencia entre entidades.
+
+### Decisión 5.1 — `Book.mark_as_loaned()` y `mark_as_returned()`: comandos puros, sin retorno
+
+**Qué:** `Book` ahora tiene dos comandos de transición de estado:
+
+```python
+def mark_as_loaned(self):
+    self.is_available = False
+
+def mark_as_returned(self):
+    self.is_available = True
+```
+
+**Por qué:** completan el row 5 (transiciones de estado) de la tabla de
+progreso. Son comandos CQS — mutan estado sin devolver valor. La versión
+inicial de `mark_as_loaned()` retornaba `self.is_available`, que tras la
+asignación siempre era `False` (un no-op informativo). El test ya verifica
+el cambio de estado con `can_be_loaned()`, así que el retorno era redundante.
+
+**Tests asociados:**
+
+```python
+def test_loaned_book_cannot_be_loaned():
+    book = Book(title="Pride and Prejudice", author="Jane Austen")
+    book.mark_as_loaned()
+    assert book.can_be_loaned() is False
+
+def test_book_can_be_loaned_again():
+    book = Book(title="The Aeneid", author="Virgil")
+    book.mark_as_loaned()
+    book.mark_as_returned()
+    assert book.can_be_loaned() is True
+```
+
+El segundo test cubre el ciclo completo: préstamo → devolución →
+disponible otra vez. Un solo test verifica ambos comandos en secuencia.
+
+### Decisión 5.2 — `Loan.is_active()`: estado derivado, no almacenado
+
+**Qué:** `Loan` tiene una query de estado:
+
+```python
+def is_active(self) -> bool:
+    return self.return_date is None
+```
+
+**Por qué:** a diferencia de `Book`, que tiene un booleano explícito
+(`is_available`), el estado de `Loan` está **implícito** en `return_date`:
+
+- `None` → el préstamo está activo (no se ha devuelto)
+- Tiene valor → el préstamo ha finalizado
+
+`is_active()` encapsula esa lógica para que el consumidor no tenga que
+inspeccionar el atributo. Es el mismo patrón que `Book.can_be_loaned()`
+encapsula `is_available`: el método es contrato público, el campo es
+detalle interno.
+
+**Error corregido durante la implementación:** la primera versión del
+usuario comprobaba `if self.loan_date` (que siempre es `True` porque
+`loan_date` tiene default `date.today()`). La condición correcta es sobre
+`return_date`, no sobre `loan_date`.
+
+**Test asociado:**
+
+```python
+def test_loan_is_active():
+    loan = Loan(1, 1)
+    assert loan.is_active() is True
+```
+
+### Decisión 5.3 — `Loan.mark_as_returned()` con parámetro opcional
+
+**Qué:** `Loan` tiene un comando de transición de estado con parámetro
+opcional:
+
+```python
+def mark_as_returned(self, return_date: date | None = None) -> None:
+    self.return_date = return_date if return_date is not None else date.today()
+```
+
+**Por qué:** la discusión de diseño evaluó dos opciones:
+
+| Opción | Firma | Ventaja | Desventaja |
+|--------|-------|---------|------------|
+| Sin parámetro | `mark_as_returned(self)` | Consistente con `Book.mark_as_returned()` | No permite backdating |
+| Con parámetro opcional | `mark_as_returned(self, return_date=None)` | Permite corregir devoluciones no registradas a tiempo | Asimetría con `Book` |
+
+El factor decisivo fue el backdating: un bibliotecario que registra el lunes
+tres devoluciones que ocurrieron el viernes. Es un caso real y frecuente en
+cualquier biblioteca, no una anticipación especulativa. El parámetro opcional
+no obliga a nadie a usarlo — el 99% de llamadas serán sin argumento.
+
+**Detalle técnico — `is not None` vs `or`:**
+
+```python
+# ✅ is not None — solo reemplaza cuando es exactamente None
+self.return_date = return_date if return_date is not None else date.today()
+
+# ❌ or — cualquier valor falsy (None, 0, "", []) dispara el default
+self.return_date = return_date or date.today()
+```
+
+`or` funciona en este caso concreto porque el tipo es `date | None`, pero
+`is not None` es más preciso y Pyright lo verifica mejor. En código
+profesional, `is not None` es preferible porque no oculta bugs de tipo.
+
+**Test asociado:**
+
+```python
+def test_loan_is_not_active():
+    loan = Loan(1, 1)
+    loan.mark_as_returned()
+    assert loan.is_active() is False
+```
+
+### Decisión 5.4 — Los comandos de `Loan` y `Book` son asimétricos por dominio, no por error
+
+**Qué:** `Loan.mark_as_returned()` acepta parámetro opcional; `Book.mark_as_returned()`
+no. Es una diferencia deliberada.
+
+**Por qué:** `Book` no maneja fechas — solo sabe si está disponible o no. La
+fecha pertenece al préstamo, no al libro. Son dominios distintos:
+
+| Comando | Entidad | ¿Parámetro? | Motivo |
+|---------|---------|:---:|---|
+| `mark_as_loaned()` | `Book` | No | Solo hay una forma de prestar un libro |
+| `mark_as_returned()` | `Book` | No | Solo hay una forma de devolverlo |
+| `mark_as_returned()` | `Loan` | `return_date` opcional | La fecha de devolución puede no coincidir con hoy |
+
+No hay inconsistencia — hay modelado fiel al dominio.
+
+### Tabla de progreso actualizada
+
+| Paso | Book | User | Loan |
+|------|------|------|------|
+| 2. Negativos de creación | ✅ | ✅ | No aplica |
+| 3. Positivo de creación | ✅ | ✅ | ✅ |
+| 4. Consulta de estado | `can_be_loaned()` ✅ | No aplica | `due_date` ✅ |
+| 5. Transiciones | `mark_as_loaned()`, `mark_as_returned()` ✅ | No aplica | `is_active()`, `mark_as_returned()` ✅ |
+| 6. Casos límite | **Falta** (`BookAlreadyLoanedError`) | No aplica | `return_date < loan_date` ✅ |
+
+> **Próxima sesión:** casos límite de `Book` — `BookAlreadyLoanedError` al
+> intentar `mark_as_loaned()` sobre un libro ya prestado, y el simétrico al
+> intentar `mark_as_returned()` sobre uno disponible.
 
 ---
 
