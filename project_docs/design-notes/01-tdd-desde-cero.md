@@ -14,11 +14,14 @@ incluye su por qué.
 
 **Estructura:**
 
-- **[Parte I](#parte-i--decisiones-de-diseño-del-sistema)** — Decisiones de diseño del sistema: entidades, Value Objects,
-  excepciones, Protocol, servicio. Lo que construimos.
-- **[Parte II](#parte-ii--decisiones-de-infraestructura-y-herramientas)** — Decisiones de infraestructura: hooks de git,
-  security-gate, entorno de desarrollo. Cómo trabajamos.
-- **[Apéndice](#apéndice)** — Guía TDD paso a paso como referencia práctica.
+- **[Parte I](#parte-i--decisiones-de-diseño-del-sistema)** — Decisiones de diseño del sistema.
+  Sesiones 0-8: entidades, Value Objects, excepciones, Protocol, repositorio.
+  Lo que construimos y por qué.
+- **[Parte II](#parte-ii--decisiones-de-infraestructura-y-herramientas)** — Decisiones de infraestructura:
+  hooks de git, security-gate, defensas npm, configuración de subagentes.
+- **[Apéndice](#apéndice--guía-práctica-tdd-paso-a-paso)** — Guía práctica TDD paso a paso:
+  pasos para VOs, entidades (1-7) y repositorio (Apéndice G).
+  Sin teoría, solo instrucciones.
 
 No solo se documenta el TDD: se documenta cada elección de herramienta, estructura,
 diseño y conocimiento adquirido.
@@ -879,7 +882,7 @@ su existencia se verifica **por uso** cuando el primer test de `Loan` falle con
 |---------|:-------------------:|--------------------|
 | `Book` | ✅ Sí | `Loan.book_id` (el test de `Loan` falla con `TypeError` si `Book` no tiene `id`) |
 | `User` | ✅ Sí | `Loan.user_id` (ídem) |
-| `Loan` | ❌ No aún | El repositorio (`InMemoryDatabase`), más adelante |
+| `Loan` | ❌ No aún | El repositorio (`InMemoryRepository`), más adelante |
 
 `Loan` no recibe su `id` propio ahora porque nadie lo necesita todavía. Misma
 regla de siempre: cada `id` nace cuando otra entidad o componente lo exige por
@@ -1215,7 +1218,7 @@ de `Book`, `email` es de `User`), no va aquí.
 **3. ¿Qué invariante de dominio protege?**
 
 ¿Qué combinación de valores es un sinsentido en el negocio? Toda entidad
-protege al menos una invariante. Si no encontrás ninguna, es sospechoso.
+protege al menos una invariante. Si no encuentras ninguna, es sospechoso.
 
 **4. ¿Qué atributos parecen necesarios pero no lo son?**
 
@@ -1311,314 +1314,6 @@ el tipo de excepción, no el motivo.
 
 ---
 
-## D5.1 — El Protocol va antes que la implementación (y nace del servicio)
-
-### El orden profesional
-
-En arquitectura limpia y DDD el orden es:
-
-```
-Necesidad del servicio → Protocol (contrato) → Implementación
-```
-
-El **servicio** (capa de casos de uso) es quien dicta qué necesita del repositorio.
-El protocolo no se diseña en el vacío pensando «¿qué métodos podría tener un
-repositorio?» — se diseña preguntando «¿qué necesita el servicio para resolver
-este caso de uso?».
-
-En TDD esto se traduce a una secuencia concreta:
-
-1. Escribes un test para `LibraryService.create_book(book_data)`
-2. El test revela que el servicio necesita guardar el libro y verificar que no exista
-3. **Nace el Protocol** con `save_book(book)` y `get_book_by_id(book_id)`
-4. **Implementas** el `InMemoryDatabase` contra ese protocolo
-
-### Por qué el contrato antes que la implementación
-
-| Razón | Explicación |
-|---|---|
-| **El consumidor manda** | El servicio no debería saber si los datos viven en memoria, en SQLite o en PostgreSQL. El protocolo define qué necesita; la implementación decide cómo. |
-| **Swapeabilidad sin tocar tests** | Un criterio de Stage 1 es poder cambiar `InMemoryDatabase` por otra implementación sin tocar los tests del servicio. Si el protocolo nace del servicio, los tests solo conocen el protocolo — no la implementación concreta. |
-| **Nada especulativo** | Si diseñas el protocolo antes del servicio, añadirás métodos que «podrían servir» pero nadie ha pedido. El servicio es el juez: solo entra en el protocolo lo que un test concreto fuerza a usar. |
-| **Python structural subtyping** | `typing.Protocol` permite duck typing con type checking. `InMemoryDatabase` no necesita declarar `implements LibraryRepository` — basta con que tenga los métodos correctos. Pero el Protocol documenta el contrato y habilita el type checker en el servicio. |
-
-### El matiz TDD: «primero el test, luego el protocolo»
-
-El protocolo es un artefacto de diseño que emerge de la **necesidad del consumidor**,
-no de la especulación sobre qué podría necesitar. En TDD:
-
-- **No diseñas el protocolo primero** y luego escribes tests contra él.
-- **Escribes un test del servicio** que fuerce a pedirle algo al repositorio.
-- El protocolo **emerge** de ese test — contiene solo lo que el test necesitó.
-
-El duck typing de Python (con `typing.Protocol`) refuerza esto: no necesitas
-declarar explícitamente que `InMemoryDatabase` implementa `LibraryRepository`.
-Pero definirlo explícitamente **documenta el contrato** y te da type checking
-en el servicio.
-
-### ¿Qué es «create book» en el dominio de biblioteca?
-
-No es magia — es **catalogación**. Cuando una biblioteca adquiere un libro físico,
-un bibliotecario lo registra en el sistema:
-
-```
-«La biblioteca compra 3 ejemplares de Dune.
- El bibliotecario abre el sistema y registra:
-   Título: Dune
-   Autor: Frank Herbert
-   → El sistema guarda el registro y le asigna un ID.»
-```
-
-`LibraryService.create_book(title, author)` es la operación que un bibliotecario
-ejecutaría desde la interfaz. El repositorio (`InMemoryDatabase`) es donde se
-guarda ese registro. Sin repositorio, los libros viven solo en memoria de una
-variable y se pierden al terminar el programa.
-
-### La cadena completa de responsabilidad
-
-| Capa | Responsable de… | Ejemplo |
-|---|---|---|
-| **Modelo** (`Book`) | Integridad de UN libro | «Un libro sin título no puede existir» |
-| **Repositorio** (`InMemoryDatabase`) | Persistencia del conjunto | «Guardo libros y los recupero por ID» |
-| **Servicio** (`LibraryService`) | Casos de uso / orquestación | «Para crear un libro: valido que el título no esté duplicado y lo guardo» |
-| **Protocol** (`LibraryRepository`) | Contrato entre servicio y repositorio | «El servicio necesita `find_by_title` y `save_book`» |
-
----
-
-## D5.2 — Diseño final de `create_book` y qué devuelve
-
-### El código de producción
-
-```python
-def create_book(self, title: str, author: str) -> Book | None:
-    if self.repo.find_by_title(title) is not None:
-        raise DuplicateBookError(
-            f"Book with title '{title}' already exists"
-        )
-
-    book = Book(title=title, author=author)
-    self.repo.save_book(book)
-    return book
-```
-
-### Por qué cada elemento
-
-| Elemento | Por qué |
-|---|---|
-| `find_by_title` | Una copia por título — el título es la clave de unicidad. Sin ISBN ni múltiples copias, es lo único que identifica al libro antes de que tenga ID. |
-| `DuplicateBookError` | Error de dominio específico, no un `ValueError` genérico. Permite que capas superiores lo traduzcan a HTTP 409. |
-| `save_book` | El servicio no sabe cómo se persiste, solo sabe que el repositorio tiene ese método. El ID lo asigna la implementación. |
-| `return book` | Convención: devolver la entidad creada permite al caller inspeccionarla. Pero el valor de retorno no se verifica en el test porque este caso de uso no lo necesita. |
-
-### Lo que NO incluye
-
-| No incluye | Por qué |
-|---|---|
-| `get_book_by_id` en el protocolo | Lo necesitará `create_loan`, no `create_book`. Cada método del protocolo nace de un test que lo fuerza. |
-| Verificación de `book_id` en el test | El ID lo asigna el repositorio; `create_book` no lo usa para nada. Verificarlo sería especulativo. |
-| Verificación de persistencia en el test del servicio | El test del repositorio ya prueba que `save_book` + `find_by_title` funcionan. El test del servicio confía en el repositorio (ya testeado por separado). |
-
-### El test de `create_book`
-
-```python
-def test_create_book():
-    db = InMemoryDatabase()
-    service = LibraryService(db)
-
-    book = service.create_book("Dune", "Herbert")
-
-    assert book.title == "Dune"
-    assert book.author == "Herbert"
-    assert book.is_available is True
-```
-
-El test no llama a `find_by_title` ni verifica `book_id`. Confía en que el
-repositorio funciona (testeado por separado) y solo verifica el contrato del
-servicio: dado título y autor válidos, devuelve un libro correcto.
-
-### Evolución del diseño del test
-
-El test de `create_book` pasó por dos versiones durante la discusión.
-
-**Versión 1 (descartada):**
-
-```python
-def test_create_book():
-    db = InMemoryDatabase()
-    service = LibraryService(db)
-
-    book = service.create_book("Dune", "Herbert")
-
-    # Recuperar para confirmar que se guardó
-    saved = db.find_by_title("Dune")
-    assert saved is not None
-    assert saved.title == "Dune"
-    assert saved.author == "Herbert"
-```
-
-Esta versión incluía `find_by_title` en el test para verificar que el repositorio
-realmente persistió el libro. El razonamiento era: «`create_book` podría devolver
-un `Book` sin haberlo guardado; `find_by_title` es la garantía».
-
-**Por qué se descartó:** el repositorio tiene sus propios tests unitarios que
-prueban que `save_book` + `find_by_title` funcionan. El test del servicio no
-debería re-testear el repositorio — confía en él. Si el test del servicio
-llama a `find_by_title`, está testeando dos unidades a la vez y pierde
-culpabilidad: un fallo no dice si es el servicio o el repositorio.
-
-**Versión 2 (final):**
-
-```python
-def test_create_book():
-    db = InMemoryDatabase()
-    service = LibraryService(db)
-
-    book = service.create_book("Dune", "Herbert")
-
-    assert book.title == "Dune"
-    assert book.author == "Herbert"
-    assert book.is_available is True
-```
-
-El test solo verifica el contrato del servicio: dado título y autor válidos,
-devuelve un libro correcto. La persistencia es responsabilidad del repositorio,
-ya testeado.
-
-> **Principio:** un test de nivel N no re-testea la unidad de nivel N-1.
-> Si el repositorio ya está testeado, el test del servicio confía en él.
-
-### Por qué el test tiene esa forma exacta
-
-| El test… | Por qué |
-|---|---|
-| No llama a `repo.find_by_title()` | El repositorio ya fue testeado por separado. Probar que `save_book` + `find_by_title` funcionan es responsabilidad de `test_inmemory_database.py`, no del test del servicio. |
-| No verifica `book.book_id` | El ID lo asigna el repositorio internamente. `create_book` no lo usa para nada. Verificarlo sería especulativo: anticipar una necesidad de `create_loan` sin que un test lo haya forzado. |
-| Solo verifica `title`, `author`, `is_available` | Son los atributos visibles del libro recién creado que el caso de uso expone. Si el servicio devuelve un libro, debe ser correcto. |
-| Usa `InMemoryDatabase` real, no un mock | En Stage 1 el repositorio es lo bastante simple como para usarlo directamente. Un mock añadiría complejidad sin beneficio. |
-
-### El test de duplicado
-
-```python
-def test_create_duplicate_book_fails():
-    db = InMemoryDatabase()
-    service = LibraryService(db)
-    service.create_book("Dune", "Herbert")
-
-    with pytest.raises(DuplicateBookError):
-        service.create_book("Dune", "Herbert")
-```
-
-Este test fuerza la existencia de `find_by_title` en el protocolo.
-
-### Por qué `create_book` no debería devolver el ID
-
-`create_book` es un **comando** (CQS): cambia el estado del sistema. Los comandos
-tienen un solo propósito — en este caso, catalogar un libro. Que el libro tenga
-ID es detalle interno del repositorio.
-
-El caller no necesita el ID al crear porque:
-
-1. Ya conoce `title` y `author` (los acaba de pasar).
-2. `is_available` siempre es `True` para un libro recién creado.
-3. Si `create_loan` necesita el ID, que lo obtenga con `find_by_title`.
-
-Incluir `book_id` en el retorno de `create_book` sería anticipar una necesidad de
-`create_loan` sin que un test lo haya forzado primero — justo lo que la
-D5.1 prohíbe.
-
-### Orden de implementación: bottom-up
-
-Cada unidad se testea antes de usarla en una unidad superior:
-
-```
-1. Test de InMemoryDatabase.save_book()       → ¿guarda y asigna ID?
-2. Test de InMemoryDatabase.find_by_title()    → ¿recupera lo guardado?
-3. Test de LibraryService.create_book()        → ¿orquesta bien?
-4. Test de LibraryService (duplicado)           → ¿rechaza duplicado?
-```
-
-El servicio usa un repositorio **ya testeado**, no uno que se testea por primera
-vez dentro del test del servicio. Si el test del servicio falla, los tests
-unitarios del repositorio te dicen si la raíz está ahí o más arriba.
-
-### Cómo el TDD redirigió el desarrollo: del servicio al repositorio
-
-La intención inicial de esta sesión era escribir el test de `create_book` y
-empezar a implementar. Pero el TDD no lo permitió. Cada paso reveló una
-dependencia que no existía y forzó a cambiar de dirección.
-
-**Cadena completa de redirección:**
-
-```
-Intención: "Testeamos create_book"
-              │
-              ▼
-El test necesita:   LibraryService(repo)
-              │
-              ▼
-¿Qué es repo?       LibraryRepository (Protocol) — no existe
-              │
-              ▼
-¿Qué métodos?        save_book, find_by_title — dictados por create_book
-              │
-              ▼
-¿Quién implementa?   InMemoryDatabase — no existe
-              │
-              ▼
-¿Está testeado?      No — el TDD no permite usarlo sin tests propios
-              │
-              ▼
-Orden real:          Repo tests → Protocol → Service tests
-```
-
-**Lo que significa en la práctica:**
-
-| Paso | Lo que queríamos hacer | Lo que el TDD nos forzó a hacer |
-|---|---|---|
-| 1 | Test de `create_book` | No — primero necesitamos `InMemoryDatabase` |
-| 2 | Escribir `InMemoryDatabase` de una | No — primero necesitamos tests del repo |
-| 3 | Usar el repo sin testearlo | No — TDD sociable confía en el repo pero solo si está testeado |
-| 4 | Test del repo → OK, implementar repo → OK, implementar protocolo → OK | **Ahora sí**: test de `create_book` |
-
-**Por qué esto es TDD genuino, no un desvío:**
-
-El TDD no es «escribir tests en el orden que planeaste». Es «escribir el test
-que toca ahora, y dejar que el test te diga qué crear después». Cada test fuerza
-a crear **lo mínimo necesario** para que pase:
-
-```
-Test de save_book     → fuerza a crear InMemoryDatabase.save_book()
-Test de find_by_title  → fuerza a crear InMemoryDatabase.find_by_title()
-Test de create_book    → fuerza a crear LibraryService + LibraryRepository
-Test de duplicado      → fuerza a crear DuplicateBookError
-```
-
-Si hubiéramos escrito `create_book` primero sin testear el repositorio, el test
-del servicio habría fallado por razones que no son del servicio (el repo no
-funciona). Habríamos mezclado dos problemas en un solo test.
-
-> **Regla que el TDD aplicó aquí:** no puedes usar una dependencia que no está
-> testeada. Si el servicio necesita el repositorio, el repositorio debe pasar
-> sus tests antes. No es una regla de estilo — es una regla de culpabilidad:
-> cuando un test falla, quieres saber exactamente qué se rompió.
-
-**Comparación con el desarrollo sin TDD:**
-
-| Sin TDD | Con TDD |
-|---|---|
-| Escribes `LibraryService` asumiendo métodos del repo | El test te dice qué métodos necesita el repo |
-| Implementas el repo después, sin tests propios | El repo nace con tests antes que el servicio |
-| Si algo falla, no sabes qué capa es | Cada fallo señala una capa exacta |
-| El orden lo decide el programador | El orden lo deciden las dependencias |
-
-**Lección:** la intención de «testear el servicio» era correcta como objetivo
-final, pero incorrecta como primer paso. El TDD expuso la cadena de dependencias
-y redirigió el desarrollo al lugar correcto: el repositorio, la capa más baja.
-Es el mismo principio que vimos con `BookError`: no podías testear `Book` hasta
-crear la excepción. Pero aplicado a capas enteras de la arquitectura.
-
----
-
 ## Patrones y principios descubiertos
 
 > Los patrones no se estudian de antemano. Emergen de los tests y se
@@ -1639,6 +1334,512 @@ crear la excepción. Pero aplicado a capas enteras de la arquitectura.
 
 > Esta sección es la referencia práctica. Leela cuando vayas a escribir código.
 > Las decisiones de arriba explican el porqué de cada regla; aquí está el cómo.
+
+---
+
+## Sesión 5 — Cambios de estado: Book y Loan
+
+> Fecha: 10 julio 2026
+
+Completamos los métodos de transición de estado que faltaban tanto en `Book`
+como en `Loan`. La sesión alternó entre implementación guiada por el usuario
+y discusiones de diseño sobre valores de retorno, parámetros opcionales y
+consistencia entre entidades.
+
+### Decisión 5.1 — `Book.mark_as_loaned()` y `mark_as_returned()`: comandos puros, sin retorno
+
+**Qué:** `Book` ahora tiene dos comandos de transición de estado:
+
+```python
+def mark_as_loaned(self):
+    self.is_available = False
+
+def mark_as_returned(self):
+    self.is_available = True
+```
+
+**Por qué:** completan el row 5 (transiciones de estado) de la tabla de
+progreso. Son comandos CQS — mutan estado sin devolver valor. La versión
+inicial de `mark_as_loaned()` retornaba `self.is_available`, que tras la
+asignación siempre era `False` (un no-op informativo). El test ya verifica
+el cambio de estado con `can_be_loaned()`, así que el retorno era redundante.
+
+**Tests asociados:**
+
+```python
+def test_loaned_book_cannot_be_loaned():
+    book = Book(title="Pride and Prejudice", author="Jane Austen")
+    book.mark_as_loaned()
+    assert book.can_be_loaned() is False
+
+def test_book_can_be_loaned_again():
+    book = Book(title="The Aeneid", author="Virgil")
+    book.mark_as_loaned()
+    book.mark_as_returned()
+    assert book.can_be_loaned() is True
+```
+
+El segundo test cubre el ciclo completo: préstamo → devolución →
+disponible otra vez. Un solo test verifica ambos comandos en secuencia.
+
+### Decisión 5.2 — `Loan.is_active()`: estado derivado, no almacenado
+
+**Qué:** `Loan` tiene una query de estado:
+
+```python
+def is_active(self) -> bool:
+    return self.return_date is None
+```
+
+**Por qué:** a diferencia de `Book`, que tiene un booleano explícito
+(`is_available`), el estado de `Loan` está **implícito** en `return_date`:
+
+- `None` → el préstamo está activo (no se ha devuelto)
+- Tiene valor → el préstamo ha finalizado
+
+`is_active()` encapsula esa lógica para que el consumidor no tenga que
+inspeccionar el atributo. Es el mismo patrón que `Book.can_be_loaned()`
+encapsula `is_available`: el método es contrato público, el campo es
+detalle interno.
+
+**Error corregido durante la implementación:** la primera versión del
+usuario comprobaba `if self.loan_date` (que siempre es `True` porque
+`loan_date` tiene default `date.today()`). La condición correcta es sobre
+`return_date`, no sobre `loan_date`.
+
+**Test asociado:**
+
+```python
+def test_loan_is_active():
+    loan = Loan(1, 1)
+    assert loan.is_active() is True
+```
+
+### Decisión 5.3 — `Loan.mark_as_returned()` con parámetro opcional
+
+**Qué:** `Loan` tiene un comando de transición de estado con parámetro
+opcional:
+
+```python
+def mark_as_returned(self, return_date: date | None = None) -> None:
+    self.return_date = return_date if return_date is not None else date.today()
+```
+
+**Por qué:** la discusión de diseño evaluó dos opciones:
+
+| Opción | Firma | Ventaja | Desventaja |
+|--------|-------|---------|------------|
+| Sin parámetro | `mark_as_returned(self)` | Consistente con `Book.mark_as_returned()` | No permite backdating |
+| Con parámetro opcional | `mark_as_returned(self, return_date=None)` | Permite corregir devoluciones no registradas a tiempo | Asimetría con `Book` |
+
+El factor decisivo fue el backdating: un bibliotecario que registra el lunes
+tres devoluciones que ocurrieron el viernes. Es un caso real y frecuente en
+cualquier biblioteca, no una anticipación especulativa. El parámetro opcional
+no obliga a nadie a usarlo — el 99% de llamadas serán sin argumento.
+
+**Detalle técnico — `is not None` vs `or`:**
+
+```python
+# ✅ is not None — solo reemplaza cuando es exactamente None
+self.return_date = return_date if return_date is not None else date.today()
+
+# ❌ or — cualquier valor falsy (None, 0, "", []) dispara el default
+self.return_date = return_date or date.today()
+```
+
+`or` funciona en este caso concreto porque el tipo es `date | None`, pero
+`is not None` es más preciso y Pyright lo verifica mejor. En código
+profesional, `is not None` es preferible porque no oculta bugs de tipo.
+
+**Test asociado:**
+
+```python
+def test_loan_is_not_active():
+    loan = Loan(1, 1)
+    loan.mark_as_returned()
+    assert loan.is_active() is False
+```
+
+### Decisión 5.4 — Los comandos de `Loan` y `Book` son asimétricos por dominio, no por error
+
+**Qué:** `Loan.mark_as_returned()` acepta parámetro opcional; `Book.mark_as_returned()`
+no. Es una diferencia deliberada.
+
+**Por qué:** `Book` no maneja fechas — solo sabe si está disponible o no. La
+fecha pertenece al préstamo, no al libro. Son dominios distintos:
+
+| Comando | Entidad | ¿Parámetro? | Motivo |
+|---------|---------|:---:|---|
+| `mark_as_loaned()` | `Book` | No | Solo hay una forma de prestar un libro |
+| `mark_as_returned()` | `Book` | No | Solo hay una forma de devolverlo |
+| `mark_as_returned()` | `Loan` | `return_date` opcional | La fecha de devolución puede no coincidir con hoy |
+
+No hay inconsistencia — hay modelado fiel al dominio.
+
+### Tabla de progreso actualizada
+
+| Paso | Book | User | Loan |
+|------|------|------|------|
+| 2. Negativos de creación | ✅ | ✅ | No aplica |
+| 3. Positivo de creación | ✅ | ✅ | ✅ |
+| 4. Consulta de estado | `can_be_loaned()` ✅ | No aplica | `due_date` ✅ |
+| 5. Transiciones | `mark_as_loaned()`, `mark_as_returned()` ✅ | No aplica | `is_active()`, `mark_as_returned()` ✅ |
+| 6. Casos límite | `BookAlreadyLoanedError`, `BookNotLoanedError` ✅ | No aplica | `return_date < loan_date` ✅ |
+
+> **Próxima sesión:** Stage 1 completion criteria — verificar cobertura >90%,
+> pyright strict zero errors, Ruff zero warnings, y documentar docstrings
+> pendientes (TD-006).
+
+---
+
+## Sesión 6 — Integridad del SDD artifact y mecanismos de control
+
+> Fecha: 11 julio 2026
+
+Sesión de proceso y documentación. El foco fue cerrar un bucle de control que
+quedó abierto desde Sesión 1: ¿cómo garantizamos que `openspec/config.yaml`
+—la fuente de verdad que todos los agentes consultan— no se desactualiza?
+
+### Decisión 6.1 — Session startup integrity check en AGENTS.md
+
+**Qué:** se añadió una nueva sección en `AGENTS.md` (`Session startup — config.yaml
+integrity check`) que obliga a verificar 5 campos de `config.yaml` contra la
+realidad del disco **al inicio de cada sesión**, antes de cualquier trabajo.
+
+**Por qué:** `AGENTS.md` se inyecta en el system prompt al iniciar cada sesión.
+Es el lugar natural para una regla proactiva. El anti-patrón #6 ya detectaba
+el problema (stale artifact) pero era reactivo — solo se activaba si la IA
+"olía" inconsistencia. La nueva regla cierra el bucle: **verificación
+obligatoria al inicio** + **detección reactiva durante la sesión**.
+
+**Campos verificados:**
+
+```bash
+git rev-parse --short HEAD          # vs project.git_head
+pytest src/tests/ -q --tb=no        # vs test_status.total_tests
+python --version                    # vs project.python_runtime
+git branch --show-current           # vs project.current_branch
+ls src/app/*.py                     # vs structure.source_files
+```
+
+También se verifican `test_status.coverage_percent`,
+`test_status.last_verified`, `domain.entities[*].behavior`, y
+`domain.exceptions.hierarchy`.
+
+### Decisión 6.2 — El integrity check en AGENTS.md es suficiente; no se necesita tooling adicional
+
+**Qué:** se descartaron mecanismos externos (pre-commit hook, CI check, script
+`sync-config`) porque el session startup integrity check en `AGENTS.md` ya
+cubre la necesidad: el agente ejecuta la verificación automáticamente al
+inicio de cada sesión, sin intervención humana.
+
+**Por qué:** añadir hooks o scripts sería redundante — un segundo portero en
+una puerta que ya tiene uno. Con 2 archivos fuente y 17 tests, el check tarda
+30 segundos. Si en stages futuros el archivo crece y el check se vuelve lento,
+se reconsiderará.
+
+### Correcciones aplicadas en esta sesión
+
+Se detectaron 6 campos stale en `config.yaml` que nadie había notado porque
+nunca se verificaban explícitamente:
+
+| Campo | Antes | Ahora |
+|---|---|---|
+| `git_head` | `02e4f0f` | `1e6ca63` |
+| `total_tests` | `12` | `17` |
+| `passing` | `12` | `17` |
+| `last_verified` | `2026-07-10` | `2026-07-11` |
+| `models.py` line count | 84 | 106 |
+| `domain.exceptions.hierarchy` | 4 clases planas | 6 clases con subclases reales |
+| `domain.entities[0].behavior` (Book) | `[can_be_loaned, mark_as_loaned]` | + `mark_as_returned` |
+| `domain.entities[2].behavior` (Loan) | (no existía) | `[is_active, mark_as_returned]` |
+
+### Corrección retrospectiva: Sesión 5
+
+La tabla de progreso de Sesión 5 marcaba los casos límite de Book como
+"Falta", cuando en realidad ya estaban implementados y commiteados en esa
+misma sesión (`BookAlreadyLoanedError`, `BookNotLoanedError` con sus tests
+`test_cannot_mark_as_loaned_twice` y `test_cannot_mark_as_returned_when_available`).
+Se corrigió la tabla para reflejar ✅.
+
+### Decisión 6.3 — Apéndice F ampliado
+
+**Qué:** se expandió el Apéndice F con la explicación detallada de los tres
+propósitos de `config.yaml` (ground truth para IA, verificación de honestidad
+para el humano, configuración del flujo SDD) y la tabla de "quién usa qué".
+
+**Por qué:** la información existía dispersa entre `AGENTS.md` (anti-patrón #6)
+y el propio `config.yaml` (comentarios), pero no estaba consolidada en ningún
+lado. El Apéndice F es el lugar canónico para documentar fuentes de verdad.
+
+### Estado actual del proyecto (fin Sesión 6)
+
+- **17 tests / 17 passing** · 100% cobertura en `models.py`
+- **Pyright strict**: 0 errores, 0 warnings
+- **Ruff**: 0 warnings
+- **Exceptions**: 6 clases con jerarquía (`BookError` → subclases)
+- **Entity methods**: `Book` (4), `User` (1), `Loan` (5)
+- **Deuda técnica activa**: TD-003, TD-004, TD-005, TD-006
+- **Próximo paso**: cerrar TD-006 (docstrings) y verificar criterios de
+  compleción de Stage 1
+
+    ---
+
+## Sesión 7 — Gate de precedencia para el integrity check
+
+> Fecha: 11 julio 2026
+
+Sesión de corrección de un fallo en el mecanismo de control de la Sesión 6:
+el integrity check no se estaba ejecutando automáticamente al iniciar `pi`.
+
+### Decisión 7.1 — El integrity check necesita un gate de precedencia, no una instrucción temporal
+
+**Qué:** se ajustó la redacción del integrity check en `AGENTS.md` para
+convertirlo en una regla de precedencia dura, y se documentó por qué la
+redacción anterior no garantizaba su ejecución automática.
+
+**Por qué:** cuando ejecutas `pi` en el directorio del proyecto, el harness
+construye el system prompt con `AGENTS.md`, Engram carga la memoria de sesiones
+pasadas, y Gentle Pi configura el contrato SDD. Pero el agente no se activa
+hasta que escribes en la TUI. El integrity check estaba redactado como «At the
+start of every session, before any work begins», lo que sugiere que ocurre al
+abrir `pi`. No es así: ocurre en el primer turno, y solo si el agente lo
+prioriza sobre lo que hayas escrito. Si tu primer mensaje es «añade un test»,
+el agente tiene dos instrucciones en su prompt —verificar y escribir el test—
+y sin una regla explícita de precedencia, puede saltarse el check y atender
+directamente tu petición. La redacción nueva elimina esta ambigüedad: el check
+va primero siempre, sin importar lo que escribas.
+
+**Dónde:** `AGENTS.md` — sección «Session startup — config.yaml integrity
+check».
+
+**Aprendido:**
+
+- Pi no tiene un bucle autónomo ni un scheduler. El agente solo actúa cuando
+escribes en la TUI. No hay actividad entre que el proceso arranca y tu primer
+mensaje.
+- Engram recuerda decisiones y contexto, pero no puede disparar acciones. El
+agente consulta memoria en respuesta a tu input, no por iniciativa propia.
+- Las reglas en `AGENTS.md` se evalúan en cada turno, pero compiten con tu
+petición. Si la regla dice «al inicio» o «antes de», pero no establece
+precedencia explícita, el agente puede decidir atender tu petición primero.
+- Solución: redactar como gate — «regardless of what the user's first message
+asks, run this check before addressing their request».
+
+**Corrección adicional:** se detectó que `AGENTS.md` declaraba Python 3.13,
+pero el sistema y `config.yaml` ya usaban 3.14.4. Se corrigió a 3.14.
+
+### Decisión 7.2 — Con la nueva redacción, cualquier prompt dispara el check
+
+Con la nueva redacción en el `AGENTS.md`, **cualquier prompt** sirve. No
+necesitas uno especial. Puedes arrancar directo con «añade un test para
+devolver libro» o «revisa el modelo de Loan» y el integrity check se ejecutará
+primero de todas formas.
+
+Ese es justo el punto de convertirlo en un gate de precedencia dura: que no
+tengas que recordar dispararlo manualmente ni usar un prompt de inicio
+específico.
+
+Antes —con la redacción anterior— el escenario ideal era que tu primer mensaje
+fuera algo genérico como «hola» o «empecemos» para dar espacio a que el check
+ocurriera sin competencia. Pero eso es frágil y depende de que lo recuerdes. La
+corrección lo vuelve innecesario.
+
+### Decisión 7.3 — Solo el integrity check necesita gate; el resto del AGENTS.md es contexto pasivo
+
+El `AGENTS.md` tiene dos tipos de contenido y solo uno necesita el gate.
+
+**Contexto pasivo** — se aplica solo, sin acción:
+
+- Convenciones de código (`dataclass`, `snake_case`, `X | None`)
+- Regla TDD estricta
+- Jerarquía de excepciones
+- Comandos del proyecto
+- Idioma (inglés para código, español neutro para conversación)
+- Política de carga de docs («para X carga Y»)
+
+Todo esto está en el system prompt. El agente no necesita «ejecutarlo» —
+simplemente condiciona cada respuesta. Si pides un test, el agente ya sabe que
+debe ser inglés, con dataclasses, siguiendo TDD. No hay decisión que tomar.
+
+**Acción proactiva** — requiere invocar herramientas:
+
+- Integrity check: ejecutar `git rev-parse`, `pytest`, `python --version`,
+`git branch`, `ls`, leer `config.yaml`, comparar, corregir.
+
+Esta es la única instrucción del `AGENTS.md` que exige que el agente haga algo
+por iniciativa propia en un momento concreto (primer turno). Las demás son
+restricciones que se aplican pasivamente.
+
+Los anti-patrones (punto 6) son un caso intermedio: son condicionales. No
+necesitan gate de primer turno porque se disparan cuando el agente detecta el
+patrón durante el trabajo, no al inicio.
+
+Así que no, no es necesario extender el mandatory first a todo el `AGENTS.md`.
+Solo a las instrucciones que requieren acción proactiva en un momento
+específico, y de momento solo hay una: el integrity check.
+
+### Lo que NO puede hacer el agente
+
+Esta sesión dejó claro el modelo real de ejecución de Pi + Gentle Pi:
+
+- Pi no tiene un bucle autónomo ni un scheduler. El agente solo actúa cuando
+el usuario escribe en la TUI.
+- Engram recuerda decisiones y contexto entre sesiones, pero no puede disparar
+acciones. El agente consulta memoria en respuesta al input, no por iniciativa
+propia.
+- Los subagentes se invocan durante un turno, no antes.
+- Las instrucciones en `AGENTS.md` se evalúan en cada turno, pero compiten en
+igualdad de condiciones con la petición explícita del usuario.
+
+Esto no es una limitación que haya que resolver con más tooling. Es la
+arquitectura del sistema. La disciplina está en cómo se redactan las reglas
+para que funcionen dentro de esta arquitectura.
+
+---
+
+## Sesión 8 — Diseño del repositorio (Protocol + InMemory)
+
+> Fecha: 11 julio 2026
+> Objetivo: construir la capa de persistencia de Stage 1 aplicando TDD
+> estricto. El resultado final es un `LibraryRepository` (Protocol) con
+> implementación `InMemoryRepository` que satisface el criterio de compleción
+> de Stage 1: repository swappable sin tocar tests.
+
+---
+
+### Cómo pensar el diseño
+
+Antes de escribir una línea de código, un arquitecto se hace preguntas.
+No sobre implementación — sobre responsabilidades, contratos y límites.
+
+#### P1: ¿Qué problema resolvemos realmente?
+
+Hoy `Book`, `User` y `Loan` son objetos en memoria volátil. El problema no
+es "guardar datos" — un `dict` global lo haría. El problema real de Stage 1
+es **demostrar que la lógica de negocio no depende de cómo se guardan los
+datos**. Si mañana cambio PostgreSQL por archivos planos, los tests deben
+seguir pasando sin tocar una línea.
+
+#### P2: ¿Por qué no una clase con dicts y ya?
+
+Podrías. Pero los tests harían `InMemoryRepository()` directamente. Si
+mañana cambias a `PostgresRepository`, reescribes todos los tests. El
+acoplamiento es el enemigo. La solución: depender de una abstracción, no
+de una concreción. En Python, eso es `typing.Protocol`.
+
+#### P3: ¿Protocol o ABC?
+
+- **ABC** (Abstract Base Class) obliga a heredar. Es rígido, estilo Java.
+- **Protocol** (PEP 544) usa duck typing estructural: cualquier clase con
+  los métodos correctos "es" un repositorio, sin heredar.
+
+Para Stage 1, donde queremos swappability sin ceremonia, **Protocol gana**.
+Está en las convenciones del proyecto.
+
+#### P4: ¿Cuántos métodos debe tener el protocolo?
+
+Una sola responsabilidad: persistencia de entidades. Ni validación (eso es
+de las entidades), ni reglas de negocio (eso va en un servicio en Stage 2).
+Solo CRUD básico. El protocolo debe ser **mínimo viable**: solo lo que los
+tests necesitan para demostrar swappability.
+
+#### P5: ¿Quién asigna los IDs?
+
+Dos opciones:
+
+| Opción | Cómo funciona | Problema |
+|---|---|---|
+| Caller pasa el ID | `repo.add_book(book)` donde `book.book_id=5` | Nada impide colisiones |
+| Repo asigna el ID | `book_id = repo.add_book(book)` devuelve un ID nuevo | — |
+
+El repositorio es una abstracción de la capa de persistencia. Cuando
+insertas en PostgreSQL con `SERIAL`, la base asigna el ID. El repositorio
+debe hacer lo mismo: el `Book` llega con `book_id=None`, el repo lo guarda
+y le asigna uno. **El repositorio es dueño de la identidad.**
+
+#### P6: ¿Qué pasa cuando algo falla?
+
+- Pides un ID que no existe → excepción
+- Intentas añadir algo inválido → excepción
+- ¿Qué excepción? Reutiliza las que ya existen: `BookNotFoundError`,
+  `UserError`, `LoanError`. No inventes nuevas a menos que el dominio
+  lo justifique.
+
+---
+
+### El diseño que emerge
+
+De esas preguntas surge este contrato:
+
+```text
+LibraryRepository (Protocol)
+├── add_book(book: Book) → BookID       # asigna ID, guarda, devuelve ID
+├── get_book(book_id: BookID) → Book    # lanza BookNotFoundError
+├── get_all_books() → list[Book]        # catálogo completo
+├── add_user(user: User) → UserID
+├── get_user(user_id: UserID) → User    # lanza UserError
+├── add_loan(loan: Loan) → LoanID
+└── get_loan(loan_id: LoanID) → Loan    # lanza LoanError
+```
+
+Siete métodos, tres entidades, responsabilidad única.
+
+---
+
+### Decisión 8.1 — `add_book` retorna `BookID`, no solo muta
+
+Esta discusión ocupó buena parte de la sesión de diseño y merece quedar
+documentada.
+
+**Opción A: no retornar nada.** `add_book` muta `book.book_id` internamente
+y no devuelve valor. Funciona, pero el caller no sabe qué ID se asignó a
+menos que conserve la referencia al objeto `book` original. En tests
+pequeños no es problema; en código real donde el objeto se pasa entre
+capas, pierdes el rastro del ID.
+
+**Opción B: retornar `BookID`.** `add_book` muta `book.book_id` Y además
+devuelve el ID asignado. El caller puede descartar el `book` original y
+aun así saber el ID. La aserción en tests es más expresiva:
+
+```python
+book_id = repo.add_book(book)
+assert repo.get_book(book_id) == book
+```
+
+Hay una simetría clara: `add_book` → `BookID` y `get_book(BookID)` → `Book`.
+Es el mismo patrón que `INSERT ... RETURNING id` en bases de datos.
+
+**Conclusión:** la opción B es mejor. No por costumbre, sino porque el
+dominio lo necesita: en Stage 2, los préstamos referencian libros y
+usuarios por ID. El retorno de `add_book` permite encadenar operaciones
+sin búsquedas intermedias por título. El ID es invisible para el usuario
+final, pero indispensable para el sistema.
+
+> **Nota sobre mutación:** en ambas opciones el repositorio muta
+> `book.book_id`. Eso es innegociable: el libro entra con `None` y sale
+> con un ID asignado. La discusión fue solo sobre si además conviene
+> devolver ese ID como valor de retorno.
+
+---
+
+### Decisión 8.2 — Happy path y fixtures: conceptos nuevos en esta sesión
+
+**Happy path** (camino feliz): el escenario donde todo sale bien, sin
+errores ni casos raros. El flujo normal y esperado.
+
+```text
+Happy path:   añado libro → recupero libro → son iguales ✓
+Unhappy path: añado libro → pido un ID inexistente → excepción ✗
+```
+
+En TDD siempre arrancas por el happy path porque: (1) es el test más
+simple, (2) validas el diseño básico antes de complicarlo con errores,
+(3) después triangulas con los unhappy paths.
+
+**Fixture de pytest:** función que pytest ejecuta antes de cada test para
+preparar dependencias. Cada test recibe una instancia nueva, garantizando
+aislamiento total. Ver `project_docs/python-theory.md` para más detalle.
 
 ---
 
@@ -1798,9 +1999,320 @@ git push
 
 ---
 
-## Apéndice
+## I2 — Extensión security-gate y hardening de seguridad de Pi
 
-Guía TDD paso a paso — referencia práctica.
+> Fecha: 28 junio 2026
+
+No se escribió código de producción ni tests del dominio. Se investigaron los
+mecanismos de seguridad de Pi y se implementó una defensa en profundidad para
+el entorno de desarrollo.
+
+### I2.1 — Documento de referencia de seguridad
+
+**Qué:** se crea `project_docs/SEGURIDAD-PI.md`, un documento de referencia
+personal (no trackeado en git) que cataloga los vectores de riesgo del agente Pi.
+
+**Por qué:** Pi corre con los permisos completos del usuario que lo lanza — sin
+sandbox, sin jaula, sin restricción de paths. Entender los riesgos es el primer
+paso para mitigarlos. El documento cubre 8 áreas:
+
+1. Herencia total de permisos de usuario
+2. Skills de terceros como vector de ataque (mismo riesgo que AGENTS.md)
+3. AGENTS.md malicioso en repos clonados
+4. Vulnerabilidades npm en dependencias de Pi (contexto CLI → riesgo nulo)
+5. Scripts de instalación frenados por npm (`allow-scripts`)
+6. Acceso de red sin restricción
+7. Subagentes e intercomunicación entre sesiones
+8. Defensa activa — extensión `security-gate`
+
+**Ubicación:** `project_docs/SEGURIDAD-PI.md` (en `.gitignore`, no se commitea).
+
+### I2.2 — Extensión security-gate
+
+**Qué:** se crea `~/.pi/agent/extensions/security-gate.ts`, una extensión de Pi
+que intercepta `tool_call` para bloquear operaciones peligrosas.
+
+**Por qué:** Pi no trae protecciones runtime por defecto. Su filosofía es
+«sin permisos, sin popups — ejecutalo en un contenedor o construí tu propio
+flujo de confirmación». La extensión cubre tres frentes:
+
+1. **Confirmación** para todos los comandos de riesgo — nada se bloquea sin preguntar.
+   Se clasifican por severidad (🔴 crítico, 🟠 alto, 🟡 medio):
+   - Crítico: `rm -rf`, `chmod 777`, `mkfs`, `dd`, fork bombs, `curl | sh`
+   - Alto: `sudo`, `git push --force`, `git reset --hard`
+   - Medio: `git push main/master`, `npm install -g`, `docker rm`
+
+2. **Confirmación para paths sensibles** en lecturas y escrituras:
+   - `~/.ssh/`, `~/.aws/`, `~/.config/gh/`, `.gitconfig`, `.npmrc`
+   - `/etc/passwd`, `/etc/shadow`, `/proc/*`
+   - `id_rsa`, `id_ed25519`, `*.pem`, archivos `credentials`
+
+**Cómo desactivarla:** `pi --exclude-tools security_gate` o renombrar el archivo.
+**Cómo verificarla:** comando `/security-gate` dentro de Pi.
+
+**Modo:** confirmación — todos los guards preguntan antes de bloquear.
+Nada es hard-blocked. El usuario siempre tiene la última palabra.
+
+**Efectividad esperada:** alta para comandos destructivos accidentales y
+lecturas de paths sensibles. No protege contra skills maliciosas que usen la
+red (para eso está el punto 2 del documento de referencia: solo instalar skills
+de fuentes confiables).
+
+### I2.3 — Mecanismos de Pi evaluados y descartados
+
+**Qué:** se evaluaron los mecanismos built-in de Pi y Gentle AI para seguridad
+runtime. Ninguno resultó suficiente por sí solo:
+
+| Mecanismo | ¿Protege comandos destructivos? | ¿Protege lecturas sensibles? | ¿Protege skills maliciosas? |
+|---|---|---|---|
+| Project Trust (Pi) | No — solo controla carga de `.pi/` | No | No — aplica a proyecto local, no a skills globales |
+| `--no-extensions` | No — es binario, todo o nada | No | No — desactiva extensiones, no skills |
+| `--offline` | No | No | Parcial — pero inhabilita búsquedas web legítimas |
+| `review-risk` (Gentle AI) | No — revisa código producido, no runtime | No | No |
+| `allow-scripts` (npm) | No — solo en instalación | No | No |
+
+**Por qué se descartaron:** ninguno opera en runtime interceptando las
+herramientas del agente. Todos son controles de configuración o de revisión
+de código. La extensión `security-gate` llena ese vacío.
+
+### I2.4 — Las vulnerabilidades npm de Pi no son responsabilidad del proyecto
+
+**Qué:** durante `pi update --extensions` aparecieron 3 vulnerabilidades npm
+(esbuild, protobufjs, hono). Se resolvieron con `npm audit fix` en
+`~/.pi/agent/npm/`. Quedó 1 sin resolver (`@mariozechner/pi-coding-agent`,
+paquete deprecado).
+
+**Por qué no son problema:** las 4 vulnerabilidades afectan a dependencias de
+Pi (CLI local), no a `library-api` (Python). En un CLI, el único input es el
+usuario — no hay superficie de ataque remota. Las vulnerabilidades npm solo
+son relevantes en servidores web expuestos.
+
+**Regla establecida:** las dependencias de `library-api` (Python, `pyproject.toml`)
+sí deben mantenerse al día y auditarse. Las de Pi (npm global) son
+responsabilidad del equipo de Pi, no del proyecto.
+
+### I2.5 — Descubrimiento: web_search y fetch_content no interceptados
+
+**Qué:** se descubre que la extensión security-gate original solo interceptaba
+`bash`, `read`, `write` y `edit`. Las herramientas `web_search` y `fetch_content`
+quedaban fuera del gate, creando un bypass para skills maliciosas.
+
+**Por qué es relevante:** una skill maliciosa podría usar `web_search` para
+enviar datos sensibles codificados en queries de búsqueda (ej. claves privadas,
+tokens) o `fetch_content` para conectar a servicios de exfiltración (requestbin,
+webhook.site). La investigación confirmó que el hook `tool_call` de la
+ExtensionAPI de Pi se dispara para **todas** las herramientas — la extensión
+simplemente no las estaba escuchando.
+
+**Prueba de concepto:** se verificó que `web_search` no era bloqueado al
+intentar buscar un patrón de clave privada. La prueba colateralmente expuso un
+bug en `pi-web-access` (ver I2.7).
+
+### I2.6 — Extensión del security-gate: Guards 4 (web_search) y 5 (fetch_content)
+
+**Qué:** se añaden dos nuevos guards al security-gate en
+`~/.pi/agent/extensions/security-gate.ts`.
+
+**Guard 4 — web_search:**
+
+- **Confirmación:** 8 patrones de exfiltración en queries (claves privadas RSA/SSH,
+  tokens GitHub `ghp_*`, AWS `AKIA*`, JWTs `eyJ*`, API keys `sk-*`, hashes hex
+  de 64+ chars, Bearer tokens). Antes eran hard-blocked.
+- **Confirmación:** queries de más de 300 caracteres (posible encoding de datos)
+
+**Guard 5 — fetch_content:**
+
+- **Confirmación:** 10 patrones de URLs sospechosas (requestbin.com/.net/.io,
+  webhook.site, Pipedream, hookbin, beeceptor, mockapi.io, pastetxt, IPs directas
+  con puerto, credenciales en query params `?token=`, `?key=`, `?secret=`).
+  Antes eran hard-blocked.
+- **Confirmación:** cualquier URL externa que no sea GitHub, PyPI, crates.io,
+  docs.rs, npm, MDN, Node.js o Python.org
+
+**Comando `/security-gate`** actualizado para reportar las 5 categorías de
+patrones (antes reportaba 3).
+
+**Por qué no se interceptan todas las herramientas:** interceptar herramientas
+como `grep`, `find`, `todo`, `mem_*`, `lsp_*`, `module_report` degradaría la
+funcionalidad básica de Pi sin aportar protección real significativa. La defensa
+en profundidad se apoya en que:
+
+1. Las herramientas de escritura/ejecución/red **sí** están interceptadas
+2. Los subagentes **sí** cargan el security-gate (ver I2.8)
+3. La capa más importante sigue siendo no instalar skills de fuentes no
+   confiables
+
+### I2.7 — Bug documentado: sendCuratorFallbackUpdate en pi-web-access
+
+**Qué:** se documenta un bug en `pi-web-access/index.ts` donde la función
+`sendCuratorFallbackUpdate` se declara con `const` dentro del bloque `try`
+(línea 1139) pero se referencia en el bloque `catch` (línea 1188). Como `const`
+tiene ámbito de bloque en JavaScript/TypeScript, la referencia en el `catch`
+produce `ReferenceError`.
+
+**Impacto:** si falla la apertura del navegador del curator de búsqueda, Pi
+crashea con excepción no capturada en lugar de mostrar un mensaje de fallback.
+
+**Solución propuesta:** mover la declaración de `sendCuratorFallbackUpdate`
+antes del `try/catch`.
+
+**Estado:**
+
+- Issue en GitHub: [#103](https://github.com/nicobailon/pi-web-access/issues/103) (abierto por otro usuario)
+- Comentario nuestro añadido el 2026-07-01 confirmando el bug en v0.13.0 + fix verificado
+- Fix local aplicado: `sendCuratorFallbackUpdate` movido antes del `try`, `handle?.url` en vez de `handle!.url`
+- Workaround: `"workflow": "auto-summary"` en `~/.pi/web-search.json`
+- ⚠️ `pi update --extensions` revierte el fix
+
+**Ubicación:** `~/.pi/agent/npm/node_modules/pi-web-access/index.ts`.
+
+**Ubicación de la documentación:** `project_docs/SEGURIDAD-PI.md` sección 9.
+
+### I2.8 — Verificación: los subagentes SÍ cargan extensiones globales
+
+**Qué:** se verificó que los subagentes de Pi cargan las extensiones desde las
+mismas ubicaciones que la sesión padre (`~/.pi/agent/extensions/`).
+
+**Evidencia:** la documentación de extensiones de Pi (`docs/extensions.md`,
+línea 431) establece que al hacer fork o iniciar una sesión nueva, Pi
+"reloads and rebinds extensions for the new session". Cada subagente es una
+sesión Pi independiente con su propia instancia del security-gate.
+
+**Implicación:** la afirmación inicial de que "el security-gate no se propaga
+a subagentes" era incorrecta. Un subagente malicioso que intente `curl -d @file`
+será bloqueado por su propia instancia del security-gate igual que en la sesión
+padre.
+
+**Corrección documental:** se actualizaron la sección 8 (tabla de herramientas),
+10.1 y 10.3 de `SEGURIDAD-PI.md` para reflejar este hallazgo.
+
+### I2.9 — Refactor: todos los guards pasan a modo confirmación
+
+> Fecha: 1 julio 2026
+
+**Qué:** se refactoriza `security-gate.ts` para que ningún patrón se bloquee
+sin preguntar. Se fusionan `DANGEROUS_PATTERNS` y `CONFIRM_PATTERNS` en un
+solo array `BASH_PATTERNS` con niveles de severidad (`critical`, `high`,
+`medium`). Los 5 guards (bash, read, write, web_search, fetch_content) ahora
+usan `ctx.ui.confirm()` con iconos de severidad (🔴🟠🟡).
+
+**Por qué:** el usuario preguntó por qué `sudo` se bloqueaba sin preguntar.
+El diseño original equiparaba erróneamente `sudo` con `rm -rf`: ambos se
+hard-blockeaban. El usuario quiere decidir en todos los casos.
+
+**Cambios:**
+
+- `DANGEROUS_PATTERNS` + `CONFIRM_PATTERNS` → `BASH_PATTERNS` (28 patrones)
+- Paths sensibles: de hard block a `ctx.ui.confirm()`
+- web_search exfiltración: de hard block a `ctx.ui.confirm()`
+- fetch_content URLs sospechosas: de hard block a `ctx.ui.confirm()`
+- Comando `/security-gate`: ahora reporta "confirmation mode"
+
+---
+
+## I3 — Defensas npm contra paquetes maliciosos
+
+> Fecha: 1 julio 2026
+
+### I3.1 — `min-release-age=3`
+
+**Qué:** se configura `min-release-age=3` en `~/.npmrc` global. npm rechaza
+cualquier versión de paquete publicada hace menos de 3 días.
+
+**Por qué:** la mayoría de paquetes maliciosos se detectan en las primeras
+horas (Socket.dev, Snyk, Aikido). Esperar 72h también supera la ventana de
+"unpublish" de npm.
+
+**Limitación:** npm no tiene exclusiones como pnpm. Si se necesita una versión
+urgente, toca bajar temporalmente a `min-release-age=0`.
+
+### I3.2 — `ignore-scripts=true`
+
+**Qué:** se configura `ignore-scripts=true` globalmente. Todos los lifecycle
+scripts (`postinstall`, `preinstall`, etc.) se suprimen durante `npm install`.
+
+**Por qué:** los `postinstall` son el vector #1 de malware en npm. Un paquete
+malicioso ejecuta código al instalarse, sin necesidad de importarlo.
+
+**Coste:** paquetes con native modules (esbuild, koffi) necesitan `npm rebuild`.
+
+### I3.3 — `allow-git=none`
+
+    **Qué:** se configura `allow-git=none`. npm rechaza dependencias instaladas
+    directamente desde repositorios git.
+
+    **Por qué:** una dependencia git puede incluir un `.npmrc` que sobreescribe
+    el path a `git` y ejecuta código durante el install, incluso con
+    `--ignore-scripts`. Es el vector más potente de los tres porque burla
+    `ignore-scripts`.
+
+    ### I3.4 — `engine-strict=true`
+
+    **Qué:** se configura `engine-strict=true`. npm rechaza paquetes cuyo
+    `engines` en `package.json` no coincida con la versión de Node instalada.
+
+    **Por qué:** protege contra paquetes abandonados o incompatibles que pueden
+    causar comportamientos impredecibles. No es defensa antimalware pero sí
+    contra degradación silenciosa del entorno.
+
+    ### I3.5 — Configuraciones evaluadas y no aplicadas
+
+    - **`audit=true`**: ya es default en npm 11. Reporta CVEs documentados pero
+      no detecta malware (un paquete malicioso sin CVE aparece limpio).
+    - **`fund=false`**: cosmético — suprime los mensajes de funding.
+      Sin impacto en seguridad.
+
+    ### Verificación conjunta
+
+    ```bash
+    npm config list | grep -E "ignore-scripts|min-release-age|allow-git|engine-strict"
+    # allow-git = "none"
+    # engine-strict = true
+    # ignore-scripts = true
+    # min-release-age = 3
+    ```
+
+---
+
+## I3 — Simplificación de configuración de subagentes Pi
+
+### Decisión I3.1 — Eliminar overrides por subagente; usar default del sistema
+
+**Qué:** se eliminan todas las configuraciones de `agentOverrides` en
+`.pi/settings.json`. Todos los subagentes usan ahora el modelo y thinking
+level por defecto del sistema.
+
+**Por qué:**
+
+1. **DeepSeek v4 colapsa los niveles de thinking.** `off` → desactivado,
+   `minimal`/`low`/`medium`/`high` → todos equivalen a `high`. Solo hay
+   2 niveles reales: pensando o no pensando.
+
+2. **Stage 1-4 es código simple.** Dataclasses, in-memory DB, single
+   process. Ningún subagente malgasta tokens pensando en algo trivial.
+
+3. **Menos mantenimiento.** Una configuración menos que mantener y
+   documentar. Si no hay ganancia real, es ruido.
+
+**Configuración anterior (de referencia):** asignaba pro+thinking a diseño
+(`sdd-proposal`, `sdd-spec`, `sdd-design`, `sdd-tasks`), flash+thinking a
+ejecución (`sdd-explore`, `sdd-apply`, `worker`), y flash sin thinking a
+tareas mecánicas (`sdd-init`, `sdd-verify`, `sdd-sync`, `sdd-archive`,
+`scout`, `delegate`). Con DeepSeek, la distinción de niveles era ilusoria.
+
+**Cuándo reintroducir:** si en Stage 5+ (FastAPI, auth, endpoints) el
+consumo de tokens se vuelve problemático, reintroducir overrides para
+optimizar: flash sin thinking para tareas mecánicas, pro con thinking
+para diseño y revisión. La referencia de cómo configurarlo está en
+memoria (Engram) bajo `config/pi-subagents`.
+
+---
+
+---
+
+---
+
+## Apéndice — Guía práctica TDD paso a paso
 
 ### Reglas antes de empezar
 
@@ -2407,7 +2919,7 @@ estado** (Principio de Responsabilidad Única).
 |---|---|---|
 | ¿El código consulta una base de datos? | Mal — la entidad no toca la DB | La persistencia es responsabilidad del repositorio. Si la entidad sabe de tablas o queries, no puedes cambiar la DB sin tocar el dominio. |
 | ¿El código sabe de fechas de devolución? | Mal — eso es del préstamo | `Loan` gestiona el ciclo de vida del préstamo. Si `Book` conoce fechas, cada vez que añadas una regla de préstamo tendrás que modificar `Book`. |
-| ¿El código sabe quién lo prestó? | Mal — eso es del servicio | La relación usuario-libro la orquesta `LibraryService`. Si `Book` guarda una referencia al usuario, estás forzando a la entidad a conocer todo el modelo de usuarios. |
+| ¿El código sabe quién lo prestó? | Mal — eso es de la capa de casos de uso | La relación usuario-libro la orquesta un caso de uso (Stage 2). Si `Book` guarda una referencia al usuario, estás forzando a la entidad a conocer todo el modelo de usuarios. |
 
 ### Checklist post-entidad
 
@@ -2434,7 +2946,7 @@ en `__post_init__`.
 | User | `username` | No (str) | `User.__post_init__` |
 
 - **Loan** relaciona `User` con `Book`. Sus tests vendrán después.
-- El orden completo: `Email (VO) → Book → User → Loan → InMemoryDatabase → LibraryService → DbProtocol`
+- El orden completo: `Email (VO) → Book → User → Loan → InMemoryRepository → DbProtocol`
 
 #### Cuándo usar Value Objects vs strings simples
 
@@ -2465,781 +2977,343 @@ en `__post_init__`.
 
 ---
 
-## I2 — Extensión security-gate y hardening de seguridad de Pi
+### Paso 8 — Repositorio: setup y primer test (happy path)
 
-> Fecha: 28 junio 2026
+**Objetivo:** crear el Protocol `LibraryRepository` y la implementación
+`InMemoryRepository`, empezando por añadir y recuperar un libro.
 
-No se escribió código de producción ni tests del dominio. Se investigaron los
-mecanismos de seguridad de Pi y se implementó una defensa en profundidad para
-el entorno de desarrollo.
+#### 8.0 — Setup
 
-### I2.1 — Documento de referencia de seguridad
+Crear dos archivos vacíos:
 
-**Qué:** se crea `project_docs/SEGURIDAD-PI.md`, un documento de referencia
-personal (no trackeado en git) que cataloga los vectores de riesgo del agente Pi.
+- `src/app/repository.py`
+- `src/tests/test_repository.py`
 
-**Por qué:** Pi corre con los permisos completos del usuario que lo lanza — sin
-sandbox, sin jaula, sin restricción de paths. Entender los riesgos es el primer
-paso para mitigarlos. El documento cubre 8 áreas:
+En `test_repository.py`, crear el fixture que usaremos en todos los pasos:
 
-1. Herencia total de permisos de usuario
-2. Skills de terceros como vector de ataque (mismo riesgo que AGENTS.md)
-3. AGENTS.md malicioso en repos clonados
-4. Vulnerabilidades npm en dependencias de Pi (contexto CLI → riesgo nulo)
-5. Scripts de instalación frenados por npm (`allow-scripts`)
-6. Acceso de red sin restricción
-7. Subagentes e intercomunicación entre sesiones
-8. Defensa activa — extensión `security-gate`
+```python
+import pytest
+from app.repository import InMemoryRepository
 
-**Ubicación:** `project_docs/SEGURIDAD-PI.md` (en `.gitignore`, no se commitea).
 
-### I2.2 — Extensión security-gate
+@pytest.fixture
+def repo() -> InMemoryRepository:
+    return InMemoryRepository()
+```
 
-**Qué:** se crea `~/.pi/agent/extensions/security-gate.ts`, una extensión de Pi
-que intercepta `tool_call` para bloquear operaciones peligrosas.
+#### 8.1 — `test_add_and_get_book`
 
-**Por qué:** Pi no trae protecciones runtime por defecto. Su filosofía es
-«sin permisos, sin popups — ejecutalo en un contenedor o construí tu propio
-flujo de confirmación». La extensión cubre tres frentes:
+```python
+from app.models import Book
+from app.repository import LibraryRepository
 
-1. **Confirmación** para todos los comandos de riesgo — nada se bloquea sin preguntar.
-   Se clasifican por severidad (🔴 crítico, 🟠 alto, 🟡 medio):
-   - Crítico: `rm -rf`, `chmod 777`, `mkfs`, `dd`, fork bombs, `curl | sh`
-   - Alto: `sudo`, `git push --force`, `git reset --hard`
-   - Medio: `git push main/master`, `npm install -g`, `docker rm`
 
-2. **Confirmación para paths sensibles** en lecturas y escrituras:
-   - `~/.ssh/`, `~/.aws/`, `~/.config/gh/`, `.gitconfig`, `.npmrc`
-   - `/etc/passwd`, `/etc/shadow`, `/proc/*`
-   - `id_rsa`, `id_ed25519`, `*.pem`, archivos `credentials`
+def test_add_and_get_book(repo: LibraryRepository) -> None:
+    book = Book(title="El Quijote", author="Cervantes")
 
-**Cómo desactivarla:** `pi --exclude-tools security_gate` o renombrar el archivo.
-**Cómo verificarla:** comando `/security-gate` dentro de Pi.
+    book_id = repo.add_book(book)
 
-**Modo:** confirmación — todos los guards preguntan antes de bloquear.
-Nada es hard-blocked. El usuario siempre tiene la última palabra.
+    assert repo.get_book(book_id) == book
+```
 
-**Efectividad esperada:** alta para comandos destructivos accidentales y
-lecturas de paths sensibles. No protege contra skills maliciosas que usen la
-red (para eso está el punto 2 del documento de referencia: solo instalar skills
-de fuentes confiables).
+**RED esperado:** `NameError` o `AttributeError` — ni `LibraryRepository`, ni
+`InMemoryRepository`, ni sus métodos existen.
 
-### I2.3 — Mecanismos de Pi evaluados y descartados
+**GREEN — código mínimo:**
 
-**Qué:** se evaluaron los mecanismos built-in de Pi y Gentle AI para seguridad
-runtime. Ninguno resultó suficiente por sí solo:
+```python
+# repository.py
+from typing import Protocol
 
-| Mecanismo | ¿Protege comandos destructivos? | ¿Protege lecturas sensibles? | ¿Protege skills maliciosas? |
-|---|---|---|---|
-| Project Trust (Pi) | No — solo controla carga de `.pi/` | No | No — aplica a proyecto local, no a skills globales |
-| `--no-extensions` | No — es binario, todo o nada | No | No — desactiva extensiones, no skills |
-| `--offline` | No | No | Parcial — pero inhabilita búsquedas web legítimas |
-| `review-risk` (Gentle AI) | No — revisa código producido, no runtime | No | No |
-| `allow-scripts` (npm) | No — solo en instalación | No | No |
+from app.models import Book, BookID
 
-**Por qué se descartaron:** ninguno opera en runtime interceptando las
-herramientas del agente. Todos son controles de configuración o de revisión
-de código. La extensión `security-gate` llena ese vacío.
 
-### I2.4 — Las vulnerabilidades npm de Pi no son responsabilidad del proyecto
+class LibraryRepository(Protocol):
+    def add_book(self, book: Book) -> BookID: ...
+    def get_book(self, book_id: BookID) -> Book: ...
 
-**Qué:** durante `pi update --extensions` aparecieron 3 vulnerabilidades npm
-(esbuild, protobufjs, hono). Se resolvieron con `npm audit fix` en
-`~/.pi/agent/npm/`. Quedó 1 sin resolver (`@mariozechner/pi-coding-agent`,
-paquete deprecado).
 
-**Por qué no son problema:** las 4 vulnerabilidades afectan a dependencias de
-Pi (CLI local), no a `library-api` (Python). En un CLI, el único input es el
-usuario — no hay superficie de ataque remota. Las vulnerabilidades npm solo
-son relevantes en servidores web expuestos.
+class InMemoryRepository:
+    def __init__(self) -> None:
+        self._books: dict[BookID, Book] = {}
+        self._next_id = 1
 
-**Regla establecida:** las dependencias de `library-api` (Python, `pyproject.toml`)
-sí deben mantenerse al día y auditarse. Las de Pi (npm global) son
-responsabilidad del equipo de Pi, no del proyecto.
+    def add_book(self, book: Book) -> BookID:
+        book.book_id = self._next_id
+        self._books[book.book_id] = book
+        self._next_id += 1
+        return book.book_id
 
-### I2.5 — Descubrimiento: web_search y fetch_content no interceptados
+    def get_book(self, book_id: BookID) -> Book:
+        return self._books[book_id]
+```
 
-**Qué:** se descubre que la extensión security-gate original solo interceptaba
-`bash`, `read`, `write` y `edit`. Las herramientas `web_search` y `fetch_content`
-quedaban fuera del gate, creando un bypass para skills maliciosas.
-
-**Por qué es relevante:** una skill maliciosa podría usar `web_search` para
-enviar datos sensibles codificados en queries de búsqueda (ej. claves privadas,
-tokens) o `fetch_content` para conectar a servicios de exfiltración (requestbin,
-webhook.site). La investigación confirmó que el hook `tool_call` de la
-ExtensionAPI de Pi se dispara para **todas** las herramientas — la extensión
-simplemente no las estaba escuchando.
-
-**Prueba de concepto:** se verificó que `web_search` no era bloqueado al
-intentar buscar un patrón de clave privada. La prueba colateralmente expuso un
-bug en `pi-web-access` (ver I2.7).
-
-### I2.6 — Extensión del security-gate: Guards 4 (web_search) y 5 (fetch_content)
-
-**Qué:** se añaden dos nuevos guards al security-gate en
-`~/.pi/agent/extensions/security-gate.ts`.
-
-**Guard 4 — web_search:**
-
-- **Confirmación:** 8 patrones de exfiltración en queries (claves privadas RSA/SSH,
-  tokens GitHub `ghp_*`, AWS `AKIA*`, JWTs `eyJ*`, API keys `sk-*`, hashes hex
-  de 64+ chars, Bearer tokens). Antes eran hard-blocked.
-- **Confirmación:** queries de más de 300 caracteres (posible encoding de datos)
-
-**Guard 5 — fetch_content:**
-
-- **Confirmación:** 10 patrones de URLs sospechosas (requestbin.com/.net/.io,
-  webhook.site, Pipedream, hookbin, beeceptor, mockapi.io, pastetxt, IPs directas
-  con puerto, credenciales en query params `?token=`, `?key=`, `?secret=`).
-  Antes eran hard-blocked.
-- **Confirmación:** cualquier URL externa que no sea GitHub, PyPI, crates.io,
-  docs.rs, npm, MDN, Node.js o Python.org
-
-**Comando `/security-gate`** actualizado para reportar las 5 categorías de
-patrones (antes reportaba 3).
-
-**Por qué no se interceptan todas las herramientas:** interceptar herramientas
-como `grep`, `find`, `todo`, `mem_*`, `lsp_*`, `module_report` degradaría la
-funcionalidad básica de Pi sin aportar protección real significativa. La defensa
-en profundidad se apoya en que:
-
-1. Las herramientas de escritura/ejecución/red **sí** están interceptadas
-2. Los subagentes **sí** cargan el security-gate (ver I2.8)
-3. La capa más importante sigue siendo no instalar skills de fuentes no
-   confiables
-
-### I2.7 — Bug documentado: sendCuratorFallbackUpdate en pi-web-access
-
-**Qué:** se documenta un bug en `pi-web-access/index.ts` donde la función
-`sendCuratorFallbackUpdate` se declara con `const` dentro del bloque `try`
-(línea 1139) pero se referencia en el bloque `catch` (línea 1188). Como `const`
-tiene ámbito de bloque en JavaScript/TypeScript, la referencia en el `catch`
-produce `ReferenceError`.
-
-**Impacto:** si falla la apertura del navegador del curator de búsqueda, Pi
-crashea con excepción no capturada en lugar de mostrar un mensaje de fallback.
-
-**Solución propuesta:** mover la declaración de `sendCuratorFallbackUpdate`
-antes del `try/catch`.
-
-**Estado:**
-
-- Issue en GitHub: [#103](https://github.com/nicobailon/pi-web-access/issues/103) (abierto por otro usuario)
-- Comentario nuestro añadido el 2026-07-01 confirmando el bug en v0.13.0 + fix verificado
-- Fix local aplicado: `sendCuratorFallbackUpdate` movido antes del `try`, `handle?.url` en vez de `handle!.url`
-- Workaround: `"workflow": "auto-summary"` en `~/.pi/web-search.json`
-- ⚠️ `pi update --extensions` revierte el fix
-
-**Ubicación:** `~/.pi/agent/npm/node_modules/pi-web-access/index.ts`.
-
-**Ubicación de la documentación:** `project_docs/SEGURIDAD-PI.md` sección 9.
-
-### I2.8 — Verificación: los subagentes SÍ cargan extensiones globales
-
-**Qué:** se verificó que los subagentes de Pi cargan las extensiones desde las
-mismas ubicaciones que la sesión padre (`~/.pi/agent/extensions/`).
-
-**Evidencia:** la documentación de extensiones de Pi (`docs/extensions.md`,
-línea 431) establece que al hacer fork o iniciar una sesión nueva, Pi
-"reloads and rebinds extensions for the new session". Cada subagente es una
-sesión Pi independiente con su propia instancia del security-gate.
-
-**Implicación:** la afirmación inicial de que "el security-gate no se propaga
-a subagentes" era incorrecta. Un subagente malicioso que intente `curl -d @file`
-será bloqueado por su propia instancia del security-gate igual que en la sesión
-padre.
-
-**Corrección documental:** se actualizaron la sección 8 (tabla de herramientas),
-10.1 y 10.3 de `SEGURIDAD-PI.md` para reflejar este hallazgo.
-
-### I2.9 — Refactor: todos los guards pasan a modo confirmación
-
-> Fecha: 1 julio 2026
-
-**Qué:** se refactoriza `security-gate.ts` para que ningún patrón se bloquee
-sin preguntar. Se fusionan `DANGEROUS_PATTERNS` y `CONFIRM_PATTERNS` en un
-solo array `BASH_PATTERNS` con niveles de severidad (`critical`, `high`,
-`medium`). Los 5 guards (bash, read, write, web_search, fetch_content) ahora
-usan `ctx.ui.confirm()` con iconos de severidad (🔴🟠🟡).
-
-**Por qué:** el usuario preguntó por qué `sudo` se bloqueaba sin preguntar.
-El diseño original equiparaba erróneamente `sudo` con `rm -rf`: ambos se
-hard-blockeaban. El usuario quiere decidir en todos los casos.
-
-**Cambios:**
-
-- `DANGEROUS_PATTERNS` + `CONFIRM_PATTERNS` → `BASH_PATTERNS` (28 patrones)
-- Paths sensibles: de hard block a `ctx.ui.confirm()`
-- web_search exfiltración: de hard block a `ctx.ui.confirm()`
-- fetch_content URLs sospechosas: de hard block a `ctx.ui.confirm()`
-- Comando `/security-gate`: ahora reporta "confirmation mode"
+**REFACTOR:** verificar que `add_book` asigna `book_id` antes de guardar y
+que el test está tipado contra `LibraryRepository`, no contra
+`InMemoryRepository`. El fixture puede devolver `InMemoryRepository` — el
+parámetro del test usa el Protocol.
 
 ---
 
-## I3 — Defensas npm contra paquetes maliciosos
+### Paso 9 — Repositorio: libro no encontrado (triangulación)
 
-> Fecha: 1 julio 2026
+**Objetivo:** `get_book` debe fallar con `BookNotFoundError` cuando el ID
+no existe.
 
-### I3.1 — `min-release-age=3`
+#### 9.1 — `test_get_book_not_found`
 
-**Qué:** se configura `min-release-age=3` en `~/.npmrc` global. npm rechaza
-cualquier versión de paquete publicada hace menos de 3 días.
+```python
+import pytest
+from app.models import BookNotFoundError
 
-**Por qué:** la mayoría de paquetes maliciosos se detectan en las primeras
-horas (Socket.dev, Snyk, Aikido). Esperar 72h también supera la ventana de
-"unpublish" de npm.
 
-**Limitación:** npm no tiene exclusiones como pnpm. Si se necesita una versión
-urgente, toca bajar temporalmente a `min-release-age=0`.
+def test_get_book_not_found(repo: LibraryRepository) -> None:
+    with pytest.raises(BookNotFoundError):
+        repo.get_book(999)
+```
 
-### I3.2 — `ignore-scripts=true`
+**RED esperado:** `KeyError` o el test falla porque `get_book` no lanza nada.
 
-**Qué:** se configura `ignore-scripts=true` globalmente. Todos los lifecycle
-scripts (`postinstall`, `preinstall`, etc.) se suprimen durante `npm install`.
+**GREEN:**
 
-**Por qué:** los `postinstall` son el vector #1 de malware en npm. Un paquete
-malicioso ejecuta código al instalarse, sin necesidad de importarlo.
+```python
+def get_book(self, book_id: BookID) -> Book:
+    if book_id not in self._books:
+        raise BookNotFoundError(f"Book with id {book_id} not found")
+    return self._books[book_id]
+```
 
-**Coste:** paquetes con native modules (esbuild, koffi) necesitan `npm rebuild`.
-
-### I3.3 — `allow-git=none`
-
-    **Qué:** se configura `allow-git=none`. npm rechaza dependencias instaladas
-    directamente desde repositorios git.
-
-    **Por qué:** una dependencia git puede incluir un `.npmrc` que sobreescribe
-    el path a `git` y ejecuta código durante el install, incluso con
-    `--ignore-scripts`. Es el vector más potente de los tres porque burla
-    `ignore-scripts`.
-
-    ### I3.4 — `engine-strict=true`
-
-    **Qué:** se configura `engine-strict=true`. npm rechaza paquetes cuyo
-    `engines` en `package.json` no coincida con la versión de Node instalada.
-
-    **Por qué:** protege contra paquetes abandonados o incompatibles que pueden
-    causar comportamientos impredecibles. No es defensa antimalware pero sí
-    contra degradación silenciosa del entorno.
-
-    ### I3.5 — Configuraciones evaluadas y no aplicadas
-
-    - **`audit=true`**: ya es default en npm 11. Reporta CVEs documentados pero
-      no detecta malware (un paquete malicioso sin CVE aparece limpio).
-    - **`fund=false`**: cosmético — suprime los mensajes de funding.
-      Sin impacto en seguridad.
-
-    ### Verificación conjunta
-
-    ```bash
-    npm config list | grep -E "ignore-scripts|min-release-age|allow-git|engine-strict"
-    # allow-git = "none"
-    # engine-strict = true
-    # ignore-scripts = true
-    # min-release-age = 3
-    ```
+**REFACTOR:** nada aún. El método ahora tiene dos ramas — la feliz y la de
+error — cubiertas por tests distintos.
 
 ---
 
-## I3 — Simplificación de configuración de subagentes Pi
+### Paso 10 — Repositorio: listar todos los libros
 
-### Decisión I3.1 — Eliminar overrides por subagente; usar default del sistema
+**Objetivo:** añadir `get_all_books()` al protocolo para recuperar el
+catálogo completo.
 
-**Qué:** se eliminan todas las configuraciones de `agentOverrides` en
-`.pi/settings.json`. Todos los subagentes usan ahora el modelo y thinking
-level por defecto del sistema.
+#### 10.1 — `test_get_all_books`
 
-**Por qué:**
+```python
+def test_get_all_books(repo: LibraryRepository) -> None:
+    repo.add_book(Book(title="El Quijote", author="Cervantes"))
+    repo.add_book(Book(title="1984", author="Orwell"))
 
-1. **DeepSeek v4 colapsa los niveles de thinking.** `off` → desactivado,
-   `minimal`/`low`/`medium`/`high` → todos equivalen a `high`. Solo hay
-   2 niveles reales: pensando o no pensando.
+    books = repo.get_all_books()
 
-2. **Stage 1-4 es código simple.** Dataclasses, in-memory DB, single
-   process. Ningún subagente malgasta tokens pensando en algo trivial.
+    assert len(books) == 2
+    titles = {b.title for b in books}
+    assert titles == {"El Quijote", "1984"}
+```
 
-3. **Menos mantenimiento.** Una configuración menos que mantener y
-   documentar. Si no hay ganancia real, es ruido.
+**RED esperado:** `AttributeError: 'InMemoryRepository' object has no
+attribute 'get_all_books'`.
 
-**Configuración anterior (de referencia):** asignaba pro+thinking a diseño
-(`sdd-proposal`, `sdd-spec`, `sdd-design`, `sdd-tasks`), flash+thinking a
-ejecución (`sdd-explore`, `sdd-apply`, `worker`), y flash sin thinking a
-tareas mecánicas (`sdd-init`, `sdd-verify`, `sdd-sync`, `sdd-archive`,
-`scout`, `delegate`). Con DeepSeek, la distinción de niveles era ilusoria.
+**GREEN:**
 
-**Cuándo reintroducir:** si en Stage 5+ (FastAPI, auth, endpoints) el
-consumo de tokens se vuelve problemático, reintroducir overrides para
-optimizar: flash sin thinking para tareas mecánicas, pro con thinking
-para diseño y revisión. La referencia de cómo configurarlo está en
-memoria (Engram) bajo `config/pi-subagents`.
+```python
+# Protocol
+class LibraryRepository(Protocol):
+    def add_book(self, book: Book) -> BookID: ...
+    def get_book(self, book_id: BookID) -> Book: ...
+    def get_all_books(self) -> list[Book]: ...
+
+# InMemoryRepository
+def get_all_books(self) -> list[Book]:
+    return list(self._books.values())
+```
+
+**REFACTOR:** `list(self._books.values())` ya devuelve una copia superficial
+— los callers no pueden mutar el diccionario interno. Si se añaden
+mutaciones a `Book` en el futuro, evaluar `copy.deepcopy`.
 
 ---
 
----
+### Paso 11 — Repositorio: añadir y recuperar usuario (happy path)
 
-## Sesión 5 — Cambios de estado: Book y Loan
+**Objetivo:** extender el protocolo con `add_user` y `get_user`.
 
-> Fecha: 10 julio 2026
-
-Completamos los métodos de transición de estado que faltaban tanto en `Book`
-como en `Loan`. La sesión alternó entre implementación guiada por el usuario
-y discusiones de diseño sobre valores de retorno, parámetros opcionales y
-consistencia entre entidades.
-
-### Decisión 5.1 — `Book.mark_as_loaned()` y `mark_as_returned()`: comandos puros, sin retorno
-
-**Qué:** `Book` ahora tiene dos comandos de transición de estado:
+#### 11.1 — `test_add_and_get_user`
 
 ```python
-def mark_as_loaned(self):
-    self.is_available = False
+from app.models import User, Email
 
-def mark_as_returned(self):
-    self.is_available = True
+
+def test_add_and_get_user(repo: LibraryRepository) -> None:
+    user = User(username="hector", email=Email("hector@mail.com"))
+
+    user_id = repo.add_user(user)
+
+    assert repo.get_user(user_id) == user
 ```
 
-**Por qué:** completan el row 5 (transiciones de estado) de la tabla de
-progreso. Son comandos CQS — mutan estado sin devolver valor. La versión
-inicial de `mark_as_loaned()` retornaba `self.is_available`, que tras la
-asignación siempre era `False` (un no-op informativo). El test ya verifica
-el cambio de estado con `can_be_loaned()`, así que el retorno era redundante.
+**RED esperado:** `AttributeError` — `add_user` y `get_user` no existen.
 
-**Tests asociados:**
+**GREEN:**
 
 ```python
-def test_loaned_book_cannot_be_loaned():
-    book = Book(title="Pride and Prejudice", author="Jane Austen")
-    book.mark_as_loaned()
-    assert book.can_be_loaned() is False
+# Protocol — añadir:
+def add_user(self, user: User) -> UserID: ...
+def get_user(self, user_id: UserID) -> User: ...
 
-def test_book_can_be_loaned_again():
-    book = Book(title="The Aeneid", author="Virgil")
-    book.mark_as_loaned()
-    book.mark_as_returned()
-    assert book.can_be_loaned() is True
+# InMemoryRepository — añadir en __init__:
+self._users: dict[UserID, User] = {}
+self._next_user_id = 1
+
+# InMemoryRepository — métodos:
+def add_user(self, user: User) -> UserID:
+    user.user_id = self._next_user_id
+    self._users[user.user_id] = user
+    self._next_user_id += 1
+    return user.user_id
+
+def get_user(self, user_id: UserID) -> User:
+    if user_id not in self._users:
+        raise UserError(f"User with id {user_id} not found")
+    return self._users[user_id]
 ```
 
-El segundo test cubre el ciclo completo: préstamo → devolución →
-disponible otra vez. Un solo test verifica ambos comandos en secuencia.
-
-### Decisión 5.2 — `Loan.is_active()`: estado derivado, no almacenado
-
-**Qué:** `Loan` tiene una query de estado:
-
-```python
-def is_active(self) -> bool:
-    return self.return_date is None
-```
-
-**Por qué:** a diferencia de `Book`, que tiene un booleano explícito
-(`is_available`), el estado de `Loan` está **implícito** en `return_date`:
-
-- `None` → el préstamo está activo (no se ha devuelto)
-- Tiene valor → el préstamo ha finalizado
-
-`is_active()` encapsula esa lógica para que el consumidor no tenga que
-inspeccionar el atributo. Es el mismo patrón que `Book.can_be_loaned()`
-encapsula `is_available`: el método es contrato público, el campo es
-detalle interno.
-
-**Error corregido durante la implementación:** la primera versión del
-usuario comprobaba `if self.loan_date` (que siempre es `True` porque
-`loan_date` tiene default `date.today()`). La condición correcta es sobre
-`return_date`, no sobre `loan_date`.
-
-**Test asociado:**
-
-```python
-def test_loan_is_active():
-    loan = Loan(1, 1)
-    assert loan.is_active() is True
-```
-
-### Decisión 5.3 — `Loan.mark_as_returned()` con parámetro opcional
-
-**Qué:** `Loan` tiene un comando de transición de estado con parámetro
-opcional:
-
-```python
-def mark_as_returned(self, return_date: date | None = None) -> None:
-    self.return_date = return_date if return_date is not None else date.today()
-```
-
-**Por qué:** la discusión de diseño evaluó dos opciones:
-
-| Opción | Firma | Ventaja | Desventaja |
-|--------|-------|---------|------------|
-| Sin parámetro | `mark_as_returned(self)` | Consistente con `Book.mark_as_returned()` | No permite backdating |
-| Con parámetro opcional | `mark_as_returned(self, return_date=None)` | Permite corregir devoluciones no registradas a tiempo | Asimetría con `Book` |
-
-El factor decisivo fue el backdating: un bibliotecario que registra el lunes
-tres devoluciones que ocurrieron el viernes. Es un caso real y frecuente en
-cualquier biblioteca, no una anticipación especulativa. El parámetro opcional
-no obliga a nadie a usarlo — el 99% de llamadas serán sin argumento.
-
-**Detalle técnico — `is not None` vs `or`:**
-
-```python
-# ✅ is not None — solo reemplaza cuando es exactamente None
-self.return_date = return_date if return_date is not None else date.today()
-
-# ❌ or — cualquier valor falsy (None, 0, "", []) dispara el default
-self.return_date = return_date or date.today()
-```
-
-`or` funciona en este caso concreto porque el tipo es `date | None`, pero
-`is not None` es más preciso y Pyright lo verifica mejor. En código
-profesional, `is not None` es preferible porque no oculta bugs de tipo.
-
-**Test asociado:**
-
-```python
-def test_loan_is_not_active():
-    loan = Loan(1, 1)
-    loan.mark_as_returned()
-    assert loan.is_active() is False
-```
-
-### Decisión 5.4 — Los comandos de `Loan` y `Book` son asimétricos por dominio, no por error
-
-**Qué:** `Loan.mark_as_returned()` acepta parámetro opcional; `Book.mark_as_returned()`
-no. Es una diferencia deliberada.
-
-**Por qué:** `Book` no maneja fechas — solo sabe si está disponible o no. La
-fecha pertenece al préstamo, no al libro. Son dominios distintos:
-
-| Comando | Entidad | ¿Parámetro? | Motivo |
-|---------|---------|:---:|---|
-| `mark_as_loaned()` | `Book` | No | Solo hay una forma de prestar un libro |
-| `mark_as_returned()` | `Book` | No | Solo hay una forma de devolverlo |
-| `mark_as_returned()` | `Loan` | `return_date` opcional | La fecha de devolución puede no coincidir con hoy |
-
-No hay inconsistencia — hay modelado fiel al dominio.
-
-### Tabla de progreso actualizada
-
-| Paso | Book | User | Loan |
-|------|------|------|------|
-| 2. Negativos de creación | ✅ | ✅ | No aplica |
-| 3. Positivo de creación | ✅ | ✅ | ✅ |
-| 4. Consulta de estado | `can_be_loaned()` ✅ | No aplica | `due_date` ✅ |
-| 5. Transiciones | `mark_as_loaned()`, `mark_as_returned()` ✅ | No aplica | `is_active()`, `mark_as_returned()` ✅ |
-| 6. Casos límite | `BookAlreadyLoanedError`, `BookNotLoanedError` ✅ | No aplica | `return_date < loan_date` ✅ |
-
-> **Próxima sesión:** Stage 1 completion criteria — verificar cobertura >90%,
-> pyright strict zero errors, Ruff zero warnings, y documentar docstrings
-> pendientes (TD-006).
+**REFACTOR:** observar el patrón repetido (dict + next_id + not found). Por
+ahora mantenerlo duplicado — la abstracción prematura es pecado. Si el
+patrón se repite con `Loan`, considerar extraer una clase base en el
+refactor del Paso 14.
 
 ---
 
-## Sesión 6 — Integridad del SDD artifact y mecanismos de control
+### Paso 12 — Repositorio: usuario no encontrado (triangulación)
 
-> Fecha: 11 julio 2026
+**Objetivo:** `get_user` debe fallar con `UserError` para IDs inexistentes.
 
-Sesión de proceso y documentación. El foco fue cerrar un bucle de control que
-quedó abierto desde Sesión 1: ¿cómo garantizamos que `openspec/config.yaml`
-—la fuente de verdad que todos los agentes consultan— no se desactualiza?
+#### 12.1 — `test_get_user_not_found`
 
-### Decisión 6.1 — Session startup integrity check en AGENTS.md
+```python
+def test_get_user_not_found(repo: LibraryRepository) -> None:
+    with pytest.raises(UserError):
+        repo.get_user(999)
+```
 
-**Qué:** se añadió una nueva sección en `AGENTS.md` (`Session startup — config.yaml
-integrity check`) que obliga a verificar 5 campos de `config.yaml` contra la
-realidad del disco **al inicio de cada sesión**, antes de cualquier trabajo.
+**RED esperado:** el test falla porque `get_user` ya lanza `UserError`
+(lo incluimos en el GREEN del paso anterior por anticipación). No es
+TDD puro, pero es código trivial — mismo patrón que `get_book`.
 
-**Por qué:** `AGENTS.md` se inyecta en el system prompt al iniciar cada sesión.
-Es el lugar natural para una regla proactiva. El anti-patrón #6 ya detectaba
-el problema (stale artifact) pero era reactivo — solo se activaba si la IA
-"olía" inconsistencia. La nueva regla cierra el bucle: **verificación
-obligatoria al inicio** + **detección reactiva durante la sesión**.
+**GREEN:** ya en verde. Confirmar con `pytest`.
 
-**Campos verificados:**
+---
+
+### Paso 13 — Repositorio: añadir y recuperar préstamo (happy path)
+
+**Objetivo:** extender el protocolo con `add_loan` y `get_loan`.
+
+#### 13.1 — `test_add_and_get_loan`
+
+```python
+from app.models import Loan
+
+
+def test_add_and_get_loan(repo: LibraryRepository) -> None:
+    book_id = repo.add_book(Book(title="El Quijote", author="Cervantes"))
+    user_id = repo.add_user(User(username="hector", email=Email("h@mail.com")))
+    loan = Loan(book_id=book_id, user_id=user_id)
+
+    loan_id = repo.add_loan(loan)
+
+    assert repo.get_loan(loan_id) == loan
+```
+
+> **Nota:** el test crea un libro y un usuario reales en el repositorio
+> porque el préstamo necesita referenciarlos por ID. Esto es un test de
+> integración ligero — prueba que las tres entidades coexisten en el mismo
+> repositorio.
+
+**RED esperado:** `AttributeError` — `add_loan` y `get_loan` no existen.
+
+**GREEN:**
+
+```python
+# Protocol — añadir:
+def add_loan(self, loan: Loan) -> LoanID: ...
+def get_loan(self, loan_id: LoanID) -> Loan: ...
+
+# InMemoryRepository — añadir en __init__:
+self._loans: dict[LoanID, Loan] = {}
+self._next_loan_id = 1
+
+# InMemoryRepository — métodos:
+def add_loan(self, loan: Loan) -> LoanID:
+    loan.loan_id = self._next_loan_id
+    self._loans[loan.loan_id] = loan
+    self._next_loan_id += 1
+    return loan.loan_id
+
+def get_loan(self, loan_id: LoanID) -> Loan:
+    if loan_id not in self._loans:
+        raise LoanError(f"Loan with id {loan_id} not found")
+    return self._loans[loan_id]
+```
+
+**REFACTOR:** el patrón se repite 3 veces. Ahora sí: considerá extraer una
+clase base o un helper. Pero solo si la duplicación es exacta. Si `Book`,
+`User` y `Loan` usan tipos distintos (`BookID`, `UserID`, `LoanID`), la
+generización puede ser más compleja que la duplicación. Para Stage 1,
+preferí duplicación clara sobre abstracción prematura.
+
+---
+
+### Paso 14 — Repositorio: préstamo no encontrado (triangulación)
+
+**Objetivo:** `get_loan` debe fallar con `LoanError` para IDs inexistentes.
+
+#### 14.1 — `test_get_loan_not_found`
+
+```python
+def test_get_loan_not_found(repo: LibraryRepository) -> None:
+    with pytest.raises(LoanError):
+        repo.get_loan(999)
+```
+
+**RED esperado:** ya en verde (mismo patrón que pasos 9 y 12).
+
+---
+
+### Paso 15 — Prueba de swappability (cierre de Stage 1)
+
+**Objetivo:** demostrar que los tests funcionan contra el Protocol, no
+contra la implementación concreta.
+
+#### 15.1 — Verificación
+
+No se requiere un test nuevo — la swappability se demuestra por
+construcción: ningún test del archivo referencia `InMemoryRepository`
+excepto el fixture. Todos los parámetros están tipados como
+`LibraryRepository`.
+
+Para verificarlo:
 
 ```bash
-git rev-parse --short HEAD          # vs project.git_head
-pytest src/tests/ -q --tb=no        # vs test_status.total_tests
-python --version                    # vs project.python_runtime
-git branch --show-current           # vs project.current_branch
-ls src/app/*.py                     # vs structure.source_files
+grep -n 
+InMemoryRepository" src/tests/test_repository.py
 ```
 
-También se verifican `test_status.coverage_percent`,
-`test_status.last_verified`, `domain.entities[*].behavior`, y
-`domain.exceptions.hierarchy`.
+Si el comando solo devuelve la línea del fixture, la swappability está
+garantizada.
 
-### Decisión 6.2 — El integrity check en AGENTS.md es suficiente; no se necesita tooling adicional
+Si devuelve más líneas (por ejemplo, un test que instancia
+`InMemoryRepository()` directamente), refactoriza ese test para recibir
+el repo como parámetro tipado con `LibraryRepository`.
 
-**Qué:** se descartaron mecanismos externos (pre-commit hook, CI check, script
-`sync-config`) porque el session startup integrity check en `AGENTS.md` ya
-cubre la necesidad: el agente ejecuta la verificación automáticamente al
-inicio de cada sesión, sin intervención humana.
+#### 15.2 — Cierre de Stage 1
 
-**Por qué:** añadir hooks o scripts sería redundante — un segundo portero en
-una puerta que ya tiene uno. Con 2 archivos fuente y 17 tests, el check tarda
-30 segundos. Si en stages futuros el archivo crece y el check se vuelve lento,
-se reconsiderará.
-
-### Correcciones aplicadas en esta sesión
-
-Se detectaron 6 campos stale en `config.yaml` que nadie había notado porque
-nunca se verificaban explícitamente:
-
-| Campo | Antes | Ahora |
-|---|---|---|
-| `git_head` | `02e4f0f` | `1e6ca63` |
-| `total_tests` | `12` | `17` |
-| `passing` | `12` | `17` |
-| `last_verified` | `2026-07-10` | `2026-07-11` |
-| `models.py` line count | 84 | 106 |
-| `domain.exceptions.hierarchy` | 4 clases planas | 6 clases con subclases reales |
-| `domain.entities[0].behavior` (Book) | `[can_be_loaned, mark_as_loaned]` | + `mark_as_returned` |
-| `domain.entities[2].behavior` (Loan) | (no existía) | `[is_active, mark_as_returned]` |
-
-### Corrección retrospectiva: Sesión 5
-
-La tabla de progreso de Sesión 5 marcaba los casos límite de Book como
-"Falta", cuando en realidad ya estaban implementados y commiteados en esa
-misma sesión (`BookAlreadyLoanedError`, `BookNotLoanedError` con sus tests
-`test_cannot_mark_as_loaned_twice` y `test_cannot_mark_as_returned_when_available`).
-Se corrigió la tabla para reflejar ✅.
-
-### Decisión 6.3 — Apéndice F ampliado
-
-**Qué:** se expandió el Apéndice F con la explicación detallada de los tres
-propósitos de `config.yaml` (ground truth para IA, verificación de honestidad
-para el humano, configuración del flujo SDD) y la tabla de "quién usa qué".
-
-**Por qué:** la información existía dispersa entre `AGENTS.md` (anti-patrón #6)
-y el propio `config.yaml` (comentarios), pero no estaba consolidada en ningún
-lado. El Apéndice F es el lugar canónico para documentar fuentes de verdad.
-
-### Estado actual del proyecto (fin Sesión 6)
-
-- **17 tests / 17 passing** · 100% cobertura en `models.py`
-- **Pyright strict**: 0 errores, 0 warnings
-- **Ruff**: 0 warnings
-- **Exceptions**: 6 clases con jerarquía (`BookError` → subclases)
-- **Entity methods**: `Book` (4), `User` (1), `Loan` (5)
-- **Deuda técnica activa**: TD-003, TD-004, TD-005, TD-006
-- **Próximo paso**: cerrar TD-006 (docstrings) y verificar criterios de
-  compleción de Stage 1
-
-    ---
-
-  ## Sesión 7 — Gate de precedencia para el integrity check
-
-    > Fecha: 11 julio 2026
-
-    Sesión de corrección de un fallo en el mecanismo de control de la Sesión 6:
-    el integrity check no se estaba ejecutando automáticamente al iniciar `pi`.
-
-  ### Decisión 7.1 — El integrity check necesita un gate de precedencia, no una instrucción temporal
-
-  **Qué:** se ajustó la redacción del integrity check en `AGENTS.md` para
-  convertirlo en una regla de precedencia dura, y se documentó por qué la
-  redacción anterior no garantizaba su ejecución automática.
-
-  **Por qué:** cuando ejecutas `pi` en el directorio del proyecto, el harness
-  construye el system prompt con `AGENTS.md`, Engram carga la memoria de sesiones
-  pasadas, y Gentle Pi configura el contrato SDD. Pero el agente no se activa
-  hasta que escribes en la TUI. El integrity check estaba redactado como «At the
-  start of every session, before any work begins», lo que sugiere que ocurre al
-  abrir `pi`. No es así: ocurre en el primer turno, y solo si el agente lo
-  prioriza sobre lo que hayas escrito. Si tu primer mensaje es «añade un test»,
-  el agente tiene dos instrucciones en su prompt —verificar y escribir el test—
-  y sin una regla explícita de precedencia, puede saltarse el check y atender
-  directamente tu petición. La redacción nueva elimina esta ambigüedad: el check
-  va primero siempre, sin importar lo que escribas.
-
-  **Dónde:** `AGENTS.md` — sección «Session startup — config.yaml integrity
-  check».
-
-  **Aprendido:**
-
-  - Pi no tiene un bucle autónomo ni un scheduler. El agente solo actúa cuando
-    escribes en la TUI. No hay actividad entre que el proceso arranca y tu primer
-    mensaje.
-  - Engram recuerda decisiones y contexto, pero no puede disparar acciones. El
-    agente consulta memoria en respuesta a tu input, no por iniciativa propia.
-  - Las reglas en `AGENTS.md` se evalúan en cada turno, pero compiten con tu
-    petición. Si la regla dice «al inicio» o «antes de», pero no establece
-    precedencia explícita, el agente puede decidir atender tu petición primero.
-  - Solución: redactar como gate — «regardless of what the user's first message
-    asks, run this check before addressing their request».
-
-  **Corrección adicional:** se detectó que `AGENTS.md` declaraba Python 3.13,
-  pero el sistema y `config.yaml` ya usaban 3.14.4. Se corrigió a 3.14.
-
-  ### Decisión 7.2 — Con la nueva redacción, cualquier prompt dispara el check
-
-  Con la nueva redacción en el `AGENTS.md`, **cualquier prompt** sirve. No
-  necesitas uno especial. Puedes arrancar directo con «añade un test para
-  devolver libro» o «revisa el modelo de Loan» y el integrity check se ejecutará
-  primero de todas formas.
-
-  Ese es justo el punto de convertirlo en un gate de precedencia dura: que no
-  tengas que recordar dispararlo manualmente ni usar un prompt de inicio
-  específico.
-
-  Antes —con la redacción anterior— el escenario ideal era que tu primer mensaje
-  fuera algo genérico como «hola» o «empecemos» para dar espacio a que el check
-  ocurriera sin competencia. Pero eso es frágil y depende de que lo recuerdes. La
-  corrección lo vuelve innecesario.
-
-  ### Decisión 7.3 — Solo el integrity check necesita gate; el resto del AGENTS.md es contexto pasivo
-
-  El `AGENTS.md` tiene dos tipos de contenido y solo uno necesita el gate.
-
-  **Contexto pasivo** — se aplica solo, sin acción:
-
-  - Convenciones de código (`dataclass`, `snake_case`, `X | None`)
-  - Regla TDD estricta
-  - Jerarquía de excepciones
-  - Comandos del proyecto
-  - Idioma (inglés para código, español neutro para conversación)
-  - Política de carga de docs («para X carga Y»)
-
-  Todo esto está en el system prompt. El agente no necesita «ejecutarlo» —
-  simplemente condiciona cada respuesta. Si pides un test, el agente ya sabe que
-  debe ser inglés, con dataclasses, siguiendo TDD. No hay decisión que tomar.
-
-  **Acción proactiva** — requiere invocar herramientas:
-
-  - Integrity check: ejecutar `git rev-parse`, `pytest`, `python --version`,
-    `git branch`, `ls`, leer `config.yaml`, comparar, corregir.
-
-  Esta es la única instrucción del `AGENTS.md` que exige que el agente haga algo
-  por iniciativa propia en un momento concreto (primer turno). Las demás son
-  restricciones que se aplican pasivamente.
-
-  Los anti-patrones (punto 6) son un caso intermedio: son condicionales. No
-  necesitan gate de primer turno porque se disparan cuando el agente detecta el
-  patrón durante el trabajo, no al inicio.
-
-  Así que no, no es necesario extender el mandatory first a todo el `AGENTS.md`.
-  Solo a las instrucciones que requieren acción proactiva en un momento
-  específico, y de momento solo hay una: el integrity check.
-
-  ### Lo que NO puede hacer el agente
-
-    Esta sesión dejó claro el modelo real de ejecución de Pi + Gentle Pi:
-
-  - Pi no tiene un bucle autónomo ni un scheduler. El agente solo actúa cuando
-      el usuario escribe en la TUI.
-  - Engram recuerda decisiones y contexto entre sesiones, pero no puede disparar
-      acciones. El agente consulta memoria en respuesta al input, no por iniciativa
-      propia.
-  - Los subagentes se invocan durante un turno, no antes.
-  - Las instrucciones en `AGENTS.md` se evalúan en cada turno, pero compiten en
-      igualdad de condiciones con la petición explícita del usuario.
-
-    Esto no es una limitación que haya que resolver con más tooling. Es la
-    arquitectura del sistema. La disciplina está en cómo se redactan las reglas
-    para que funcionen dentro de esta arquitectura.
-
-    ---
-
-  ## Apéndice F — Fuentes de verdad del proyecto
-
-El proyecto tiene dos archivos que funcionan como fuentes de verdad, con roles
-claramente distintos:
-
-| Archivo | Rol | ¿Qué contiene? |
-|---|---|---|
-| `AGENTS.md` | **Manual de vuelo** | Reglas, convenciones, comandos, anti-patrones, TDD |
-| `openspec/config.yaml` | **Radiografía del presente** | Lo que EXISTE ahora en disco: archivos, stack, tests, dominio |
-
-`AGENTS.md` te dice **cómo trabajar**. `config.yaml` te dice **qué hay construido**.
-
----
-
-### ¿Para qué se usa `openspec/config.yaml`?
-
-**No es de uso exclusivo de la IA.** Es un artefacto compartido con tres
-propósitos:
-
-#### 1. Ground truth para los agentes de IA
-
-Pi, los subagentes y las fases SDD leen `config.yaml` para saber el estado
-real del proyecto sin tener que escanear el disco en cada sesión. Sustituye
-decenas de comandos exploratorios (`ls`, `git branch`, `cat pyproject.toml`,
-`pytest --co`, etc.) por una lectura única y determinista.
-
-Ejemplos concretos de lo que la IA consulta aquí:
-
-- `structure.source_files` → qué archivos de producción existen
-- `project.python_runtime` → versión exacta de Python en el venv
-- `project.current_branch` → branch activo (verificado con `git branch --show-current`)
-- `commands.test` → cómo ejecutar los tests correctamente
-- `conventions.quote_style` → comillas dobles, no simples
-- `conventions.line_length` → 88 columnas (Ruff)
-- `test_status` → cuántos tests hay, cuántos pasan, cobertura actual
-- `domain.entities` → qué entidades existen, sus campos e invariantes
-- `stack` → qué herramientas están instaladas, versiones y estado
-
-#### 2. Verificación de honestidad para el humano
-
-El anti-patrón #6 de `AGENTS.md` (`Stale SDD artifact`) convierte a
-`config.yaml` en un mecanismo de auditoría: **tú puedes leerlo y verificar
-que lo que dice coincide con la realidad.**
-
-Si el archivo lista `src/app/models.py` pero ese archivo no existe en disco,
-o dice `python_runtime: "3.14.4"` cuando el venv tiene otra versión, o
-referencia un branch que no es el actual → el archivo miente y hay que
-corregirlo. Esto te da control sobre lo que la IA cree del proyecto.
-
-#### 3. Configuración del flujo SDD
-
-La sección `sdd:` controla cómo Pi ejecuta las fases del ciclo
-specification-driven:
-
-- `execution_mode: interactive` → pausa entre fases, pide confirmación
-- `approval_keywords: ["continue", "dale", "go on", "next"]` → palabras
-  que el humano usa para autorizar el avance a la siguiente fase
-- `artifact_store: both` → los artefactos se guardan en archivos OpenSpec
-  y también en memoria Engram
-- `review_budget_lines: 200` → umbral a partir del cual un PR se considera
-  grande y dispara el flujo de revisión 4R
-- `phase_gate: one_at_a_time` → solo una fase SDD activa por vez
-
-#### Tabla resumen: quién usa qué
-
-| ¿Quién lo usa? | ¿Para qué? |
-|---|---|
-| **IA** (Pi, subagentes, fases SDD) | Saber el estado real del proyecto sin escanear el disco |
-| **Humano** (tú) | Verificar que la IA no está trabajando con datos falsos (anti-patrón #6) |
-| **Flujo SDD** | Controlar cómo se ejecutan las fases de diseño/implementación |
-
-No es "el archivo de la IA". Es **el contrato compartido entre el humano y la
-IA sobre cómo es el proyecto ahora mismo**.
-
----
-
-### Ciclo de vida de `config.yaml`
-
-```
-Proyecto nuevo
-     │
-     ▼
-sdd-init ─────→ Crea openspec/config.yaml
-                 (el agente lo genera desde cero)
-     │
-     ▼
-Cada sesión: el agente LEE el archivo y EJECUTA el
-             session startup integrity check (AGENTS.md)
-             → verifica 5 campos contra la realidad del disco
-             → corrige discrepancias antes de empezar a trabajar
-     │
-     ▼
-Cada cambio en disco: el agente (o vos) ACTUALIZA el archivo
-                      (nuevos archivos, tests, entidades)
-     │
-     ▼
-Entre sesiones: PERSISTE en disco, nunca se pierde
+```bash
+ruff check src/ && ruff format src/ && pyright
+pytest src/tests/ -v --cov=src/app --cov-report=term-missing
 ```
 
-### Regla de oro
+**Criterio de salida:**
 
-`config.yaml` describe solo el **presente** (Stage 1, lo que existe en disco).
-El futuro (Stages 2-12) vive exclusivamente en `ROADMAP_FINAL_2026.md`.
-Duplicar datos del roadmap en `config.yaml` garantiza que se desactualicen
-(stale artifact). La sección `roadmap` de `config.yaml` contiene solo un
-puntero al archivo canónico.
+- `LibraryRepository` (Protocol) con 7 métodos.
+- `InMemoryRepository` implementa el protocolo.
+- Tests independientes de la implementación (tipados contra el protocolo).
+- Pyright strict: 0 errores.
+- Ruff: 0 warnings.
+- Cobertura ≥ 90%.

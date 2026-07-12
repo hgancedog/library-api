@@ -29,7 +29,7 @@ project:
   current_stage: 1
   current_stage_name: Foundations
   current_branch: stage1-tdd-from-scratch # verified: git branch --show-current
-  git_head: 30e0a5d # verified: git rev-parse --short HEAD
+  git_head: 2f998b4 # verified: git rev-parse --short HEAD
 
   roadmap_file: project_docs/ROADMAP_FINAL_2026.md
   stage_summaries: project_docs/stage_summaries.md
@@ -65,7 +65,7 @@ stack:
     role: Test runner
     plugins: [pytest-cov>=6.0]
     config: pyproject.toml
-    status: active # 12 tests, 0 failures
+    status: active # 17 tests, 0 failures
 
   - tool: pre-commit
     version: "4.5.1"
@@ -155,8 +155,8 @@ domain:
 
     - name: User
       kind: dataclass
-      fields: [username, email]
-      id_field: none yet
+      fields: [username, email, user_id]
+      id_field: "user_id: UserID | None"
       invariants: username must be non-empty (validated in __post_init__)
       note: email is an Email value object, not a plain string
 
@@ -208,7 +208,7 @@ test_status:
   covered_module: src/app/models.py
   pyright_errors: 0
   ruff_warnings: 0
-  last_verified: "2026-07-11"
+  last_verified: "2026-07-12"
 
 # ──────────────────────────────────────────────────────────────
 # KNOWN TECH DEBT — STAGE 1
