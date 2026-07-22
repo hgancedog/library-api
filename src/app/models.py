@@ -23,6 +23,10 @@ class BookNotLoanedError(BookError):
     """Raised when attempting to return a book that is not loaned."""
 
 
+class BookNotFoundError(BookError):
+    """Raised when a book ID does not exist in the repository."""
+
+
 class UserError(LibraryApiError):
     """Raised for general user-related failures."""
 
