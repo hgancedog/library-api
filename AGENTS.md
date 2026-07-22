@@ -81,19 +81,16 @@ LibraryApiError
 - Ruff — zero warnings
 - Test coverage > 90% on business logic
 
-## Session startup — config.yaml integrity check
+## config.yaml integrity check
 
-**Mandatory first action**: on the first user message of any session —
-regardless of what the user asked — run the integrity check below before
-addressing their request. The agent is reactive (requires a user message to
-trigger) but this check takes precedence over all other work.
+`openspec/config.yaml` is ground truth for SDD agents and subagents. A stale
+config derails entire phases. Verify it at three checkpoints:
 
-Verify that `openspec/config.yaml` matches the actual state on disk. If any
-field is stale, update it before proceeding — a stale config wastes entire SDD
-phases because agents and subagents treat it as ground truth.
+### When closing a session that modified `src/`
+
+If the session touched production code or tests, run before ending:
 
 ```bash
-# Run these 5 checks in one pass:
 git rev-parse --short HEAD          # vs project.git_head
 pytest src/tests/ -q --tb=no        # vs test_status.total_tests
 python --version                    # vs project.python_runtime
@@ -101,15 +98,22 @@ git branch --show-current           # vs project.current_branch
 ls src/app/*.py                     # vs structure.source_files
 ```
 
-Also verify:
+Also update `test_status.coverage_percent`, `test_status.last_verified`,
+`domain.entities[*].behavior` and `domain.exceptions.hierarchy` if they changed.
 
-- `test_status.coverage_percent` — run `pytest --cov=src/app --cov-report=term-missing`
-- `test_status.last_verified` — update to today's date
-- `domain.entities[*].behavior` — check for new methods added since last sync
-- `domain.exceptions.hierarchy` — check for new exception classes
+### Before any git commit
 
-This is NOT optional. The cost of a stale config is the cost of an entire
-SDD session built on false assumptions.
+When a commit is about to be created, run the same verification. This catches
+stale config before it gets sealed into a commit — the most dangerous form of
+drift, since future agents will read it as ground truth.
+
+### Before any SDD phase or subagent
+
+The orchestrator or any SDD subagent runs the same verification before reading
+`config.yaml`. This is the safety net in case the previous session closure
+or pre-commit check didn't do it.
+
+Read-only sessions, doc reviews, or conversations do **not** need this check.
 
 ## Productivity guard — anti-pattern detection
 
@@ -137,8 +141,8 @@ No production code before a failing test. This is not negotiable in Stage 1.
 
 ## Known tech debt
 
-- **Branch rename post-Stage 1**: al finalizar Stage 1, eliminar `stage1-inmemory` (local + remoto, 17 commits obsoleta) y renombrar `stage1-tdd-from-scratch` → `stage1-inmemory`. Actualizar referencias en `AGENTS.md`, `openspec/config.yaml`, `stage_summaries.md` y `ROADMAP_FINAL_2026.md`.
-- **Docstrings pendientes**: `models.py` tiene docstrings en las excepciones pero no en entidades (`Book`, `User`, `Loan`, `Email`), métodos públicos (`can_be_loaned`, `mark_as_loaned`, `due_date`), ni type aliases (`BookID`, `UserID`, `LoanID`). Añadir al finalizar Stage 1 para que el código sea auditable por IA y profesional para portfolio.
+- **Branch rename post-Stage 1**: after completing Stage 1, delete `stage1-inmemory` (local + remote, 17 stale commits) and rename `stage1-tdd-from-scratch` → `stage1-inmemory`. Update references in `AGENTS.md`, `openspec/config.yaml`, `stage_summaries.md`, and `ROADMAP_FINAL_2026.md`.
+- **Pending docstrings**: `models.py` has docstrings on exceptions but not on entities (`Book`, `User`, `Loan`, `Email`), public methods (`can_be_loaned`, `mark_as_loaned`, `due_date`), or type aliases (`BookID`, `UserID`, `LoanID`). Add them when Stage 1 is done so the code is AI-auditable and portfolio-ready.
 
 ## Context loading policy
 

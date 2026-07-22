@@ -14,13 +14,13 @@ incluye su por qué.
 
 **Estructura:**
 
-- **[Parte I](#parte-i--decisiones-de-diseño-del-sistema)** — Decisiones de diseño del sistema.
+- [Parte I](#parte-i) — Decisiones de diseño del sistema.
   Sesiones 0-8: entidades, Value Objects, excepciones, Protocol, repositorio.
   Lo que construimos y por qué.
-- **[Parte II](#parte-ii--decisiones-de-infraestructura-y-herramientas)** — Decisiones de infraestructura:
+- [Parte II](#parte-ii) — Decisiones de infraestructura:
   hooks de git, security-gate, defensas npm, configuración de subagentes.
-- **[Apéndice](#apéndice--guía-práctica-tdd-paso-a-paso)** — Guía práctica TDD paso a paso:
-  pasos para VOs, entidades (1-7) y repositorio (Apéndice G).
+- [Apéndice](#apéndice) — Guía práctica TDD paso a paso:
+  pasos para VOs, entidades (1-7) y repositorio (Pasos 8-15).
   Sin teoría, solo instrucciones.
 
 No solo se documenta el TDD: se documenta cada elección de herramienta, estructura,
@@ -28,7 +28,9 @@ diseño y conocimiento adquirido.
 
 ---
 
-# Parte I — Decisiones de diseño del sistema
+## Parte-I
+
+Decisiones de diseño del sistema
 
 ---
 
@@ -104,7 +106,7 @@ dev = [
 **Por qué cada herramienta:**
 
 | Dependencia | Rol | ¿Por qué esta y no otra? |
-|---|---|---|
+| --- | --- | --- |
 | pytest | Ejecutar tests | Estándar de la industria. Simple: busca funciones `test_*` y las ejecuta. Sin configuración inicial. |
 | pytest-cov | Medir cobertura | Integración directa con pytest (`--cov`). Muestra qué líneas no pasan los tests. |
 | pyright | Type checker | Análisis estático de tipos en modo strict (`pyrightconfig.json`). Detecta errores de tipo antes de ejecutar. Más rápido que mypy. |
@@ -132,7 +134,7 @@ pip install -e ".[dev]"
 ```
 
 | Parte | Significado |
-|---|---|
+| --- | --- |
 | `pip install` | Instala paquetes Python |
 | `-e` | Modo **editable** (development mode). Instala un archivo `.pth` en `site-packages` que apunta a `src/`. Python lo lee al arrancar y añade esa ruta a `sys.path`. Los cambios en el código fuente se reflejan al instante al importar, sin reinstalar. **No es un symlink.** |
 | `.` | Instala el paquete del directorio actual (library-api, definido en `pyproject.toml`) |
@@ -318,7 +320,7 @@ Arranca la escritura de tests reales siguiendo el orden de trabajo del apéndice
 **Qué:** el proyecto sigue PEP 8 con los ajustes de Ruff. Las reglas principales:
 
 | Regla | PEP 8 | Este proyecto |
-|---|---|---|
+| --- | --- | --- |
 | Nombres de funciones | `snake_case` | `test_email_requires_at_sign` |
 | Nombres de clases | `PascalCase` | `Email`, `Book`, `BookError` |
 | Nombres de módulos | `snake_case` | `models.py`, `test_email.py` |
@@ -339,12 +341,12 @@ partir líneas constantemente.
 Los tests se nombran por **la regla que el código debe cumplir**, no por
 el input que reciben. La estructura:
 
-```
+```text
 test_<entidad>_<comportamiento_esperado>
 ```
 
 | Ejemplo | Entidad | Comportamiento que prueba |
-|---|---|---|
+| --- | --- | --- |
 | `test_email_rejects_invalid_format` | Email | Rechaza un email sin formato válido (negativo) |
 | `test_email_normalizes_to_lowercase` | Email | Convierte el email a minúsculas (positivo) |
 | `test_book_requires_title` | Book | Necesita título — lo prueba con título vacío (negativo) |
@@ -385,7 +387,7 @@ en WSL con sus propias extensiones.
 **Extensiones recomendadas para este proyecto:**
 
 | Extensión | Para qué | Por qué |
-|---|---|---|
+| --- | --- | --- |
 | Python (`ms-python.python`) | Intérprete, test discovery, depuración | Núcleo del soporte Python en VSCode |
 | Pylance (`ms-python.vscode-pylance`) | Type checking, autocompletado | Usa Pyright, el type checker del proyecto |
 | Python Debugger (`ms-python.debugpy`) | Debugging paso a paso | Depurar tests que fallan sin `print()` |
@@ -441,7 +443,7 @@ con validación por regex y `@dataclass(frozen=True)`. El test pasa a verde.
 
 **Estado final de la estructura:**
 
-```
+```text
 src/
 ├── app/
 │   ├── __init__.py
@@ -502,7 +504,7 @@ import dataclass` (nombre único) para el decorador.
 **Regla general:**
 
 | Situación | Forma |
-|---|---|
+| --- | --- |
 | Usas una sola cosa del módulo | `from X import Y` |
 | Usas varias cosas o el nombre solo es ambiguo | `import X` |
 
@@ -515,7 +517,7 @@ manager propio de pytest.
 **Por qué:**
 
 | Mecanismo | Origen | Qué hace |
-|---|---|---|
+| --- | --- | --- |
 | `assert condicion` | Python built-in | Lanza `AssertionError` si la condición es falsa |
 | `pytest.raises(Excepción)` | pytest | Verifica que el bloque dentro del `with` lance la excepción esperada |
 
@@ -526,7 +528,7 @@ marca el test como `FAILED`. Pero `assert` sigue siendo Python puro.
 **Cuándo usar cada uno:**
 
 | Situación | Usar |
-|---|---|
+| --- | --- |
 | Verificar un resultado (`==`, `is`, `in`) | `assert` |
 | Verificar que se lanza una excepción | `pytest.raises` |
 | Verificar que NO se lanza excepción | `assert` normal (el test falla solo si hay excepción) |
@@ -571,7 +573,7 @@ padre. Son un bloque atómico: se crean juntos.
 La secuencia real del primer RED sería:
 
 | # | Error | Qué crear |
-|---|-------|------------|
+| --- | ------- | ------------ |
 | 1 | `NameError: name 'BookError' is not defined` | `class LibraryApiError(Exception): pass` + `class BookError(LibraryApiError): pass` |
 | 2 | `NameError: name 'Book' is not defined` | `@dataclass class Book: ...` mínima |
 | 3 | `BookError no fue lanzada` | Añadir validación en `__post_init__` |
@@ -590,7 +592,7 @@ Por eso se crean **las dos a la vez**, en un solo paso de RED.
 **Qué:** `Book` no nace con todos sus atributos definidos de antemano. Cada
 atributo aparece cuando un test lo exige. El constructor evoluciona así:
 
-```
+```text
 Book(title, author)                              ← tests 2.1 y 2.2
 Book(title, author, is_available=True)           ← test 3 (primer assert que nombra is_available)
 Book(title, author, is_available=True, id=None)  ← tests de repositorio (cuando existan)
@@ -600,7 +602,7 @@ Book(title, author, is_available=True, id=None)  ← tests de repositorio (cuand
 diseño previo. Cada campo se añade cuando hay un test que lo necesita:
 
 | Campo | ¿Cuándo aparece? | Test que lo fuerza |
-|---|---|---|
+| --- | --- | --- |
 | `title: str` | Test 2.1 | `test_book_requires_title` — necesita un título para validar |
 | `author: str` | Test 2.1 | El test usa `Book(title="", author="...")` — si `author` no existiera, el constructor fallaría |
 | `is_available: bool = True` | Test 3 | `assert book.is_available is True` es el primer lugar donde se nombra el campo |
@@ -628,11 +630,11 @@ el positivo. No se intercala negativo → positivo → negativo.
    obliga a escribir código nuevo. Es un test que nace verde, y un test que nace
    verde no aporta valor en TDD.
 
-3. **El orden natural del dominio.** Cuando creas un libro, primero te asegurás
+3. **El orden natural del dominio.** Cuando creas un libro, primero te aseguras
    de que no puede nacer roto (título vacío, autor vacío). Solo después confirmás
    que con datos válidos se crea correctamente.
 
-```
+```text
 Test 2.1 — negativo: título vacío
 Test 2.2 — negativo: autor vacío
 Test 3   — positivo: creación exitosa (prueba is_available, title, author)
@@ -696,9 +698,10 @@ explícitamente, campo por campo. No se usan bucles sobre `vars(self)` ni
 
 3. **Trazabilidad TDD.** Cada campo obligatorio tiene su test negativo:
 
-   ```
-   test_book_requires_title  → if not self.title
-   test_book_requires_author → if not self.author
+   ```text
+   test_book_requires_title    → if not self.title
+   test_book_requires_author   → if not self.author
+   test_user_requires_username → if not self.username
    ```
 
    Con validación automática, un solo test cubriría varios campos. Si falla,
@@ -776,7 +779,7 @@ a una categoría distinta de preguntas sobre el dominio y enseña un patrón
 de test diferente.
 
 | Fase | Qué aprendés | Pregunta del dominio |
-|------|-------------|---------------------|
+| ------ | ------------- | --------------------- |
 | VO | Validar un dato aislado | ¿Este dato es correcto por sí mismo? |
 | Creación | La entidad no puede nacer rota | ¿Qué campos son obligatorios? |
 | Comportamiento | Métodos que consultan estado | ¿Qué me puede decir el objeto sobre sí mismo? |
@@ -817,16 +820,25 @@ su existencia se verifica **por uso** cuando el primer test de `Loan` falle con
 **Qué:** `Loan` nace con cinco atributos:
 
 | Atributo | Tipo | Default | Significado |
-|----------|------|---------|-------------|
+| ---------- | ------ | --------- | ------------- |
 | `book_id` | `BookID` (`int`) | — | Qué libro se prestó |
 | `user_id` | `UserID` (`int`) | — | Quién lo pidió |
 | `loan_date` | `date` | `date.today()` | Fecha del préstamo |
-| `due_date` | `date` | `field(init=False)` → `loan_date + timedelta(days=30)` | Fecha límite de devolución |
-
-> ⚠️ **Actualizado en 4.4:** `due_date` pasó de ser parámetro explícito a
-> `field(init=False)` calculado automáticamente. Ver Decisión 4.4 para el
-> razonamiento completo.
+| `due_date` | `date` | `@property` → `loan_date + timedelta(days=30)` | Fecha límite de devolución |
 | `return_date` | `date \| None` | `None` | `None` = aún no devuelto |
+
+**Por qué cada atributo:**
+
+- `book_id` y `user_id` son la conexión mínima para una entidad asociativa.
+- `loan_date` con default `date.today()` refleja que un préstamo siempre
+  empieza «ahora». El servicio puede sobrescribirlo si necesita otra fecha.
+- `due_date` es una propiedad computada (`@property`): no almacena el valor,
+  lo calcula como `loan_date + timedelta(days=30)`. Como `loan_date` nunca
+  cambia tras la creación, el resultado es siempre el mismo. Al ser una
+  invariante estructural garantizada por construcción, no necesita test
+  negativo — se verifica con un test positivo que comprueba la relación.
+- `return_date` es opcional: `None` mientras el libro está prestado, toma
+  valor cuando se ejecuta `mark_as_returned()`.
 
 > **Nota sobre `loan_date` y `default_factory`:**
 >
@@ -847,27 +859,13 @@ su existencia se verifica **por uso** cuando el primer test de `Loan` falle con
 > módulo — todos los préstamos tendrían la misma fecha. Con `default_factory`,
 > Python llama a `date.today()` cada vez que se instancia `Loan`.
 
-**Por qué cada atributo:**
-
-- `book_id` y `user_id` son la conexión mínima para una entidad asociativa.
-- `loan_date` con default `date.today()` refleja que un préstamo siempre
-  empieza «ahora». El servicio puede sobrescribirlo si necesita otra fecha.
-- `due_date` **→ modificado en 4.4:** ahora se calcula automáticamente como
-  `loan_date + timedelta(days=30)` mediante `field(init=False)`. El razonamiento
-  original de 4.2 (política de negocio en el servicio, hecho del dominio,
-  distintas duraciones por categoría) se reconsideró: en Stage 1 la duración
-  es fija (30 días) y hacer imposible el estado inválido por construcción
-  elimina la necesidad de un test negativo.
-- `return_date` es opcional: `None` mientras el libro está prestado, toma
-  valor cuando se ejecuta `return_book()`.
-
 **Distinción `due_date` vs `return_date`:**
 
 | | `due_date` | `return_date` |
-|---|---|---|
+| --- | --- | --- |
 | Naturaleza | Promesa | Hecho consumado |
 | Responde a | ¿Para cuándo lo tengo que devolver? | ¿Cuándo lo devolvió? |
-| Se fija en | Creación del préstamo | `return_book()` |
+| Se fija en | Creación del préstamo | `mark_as_returned()` |
 | Cambia | No | Solo una vez (de `None` a fecha) |
 | Juntos permiten | — | `was_returned_late()`: ¿hubo retraso? |
 
@@ -879,7 +877,7 @@ su existencia se verifica **por uso** cuando el primer test de `Loan` falle con
 **Progresión de `id` en las entidades:**
 
 | Entidad | ¿Tiene `id` ahora? | ¿Quién lo fuerza? |
-|---------|:-------------------:|--------------------|
+| --------- | :-------------------: | -------------------- |
 | `Book` | ✅ Sí | `Loan.book_id` (el test de `Loan` falla con `TypeError` si `Book` no tiene `id`) |
 | `User` | ✅ Sí | `Loan.user_id` (ídem) |
 | `Loan` | ❌ No aún | El repositorio (`InMemoryRepository`), más adelante |
@@ -887,254 +885,6 @@ su existencia se verifica **por uso** cuando el primer test de `Loan` falle con
 `Loan` no recibe su `id` propio ahora porque nadie lo necesita todavía. Misma
 regla de siempre: cada `id` nace cuando otra entidad o componente lo exige por
 uso, no por anticipación.
-
-### Decisión 4.3 — Validación única: `due_date > loan_date`
-
-**Qué:** la única validación de dominio en `__post_init__` es que la fecha de
-devolución sea posterior a la fecha de préstamo.
-
-**Por qué:**
-
-- `book_id` y `user_id` son `int` — sin validación de dominio. El tipo los
-  protege. Su existencia se verifica por uso.
-- `loan_date` tiene default sensato (`date.today()`). Validar que no sea
-  futura añadiría complejidad sin un caso de uso real en Stage 1.
-- `due_date` es el único campo cuya invariante puede romperse: `due_date`
-  anterior o igual a `loan_date` es un sinsentido de dominio.
-- `return_date` es opcional por definición — no hay invariante que proteger.
-
-**Tests resultantes (fase 2 y 3):**
-
-| # | Test | Fase |
-|---|------|------|
-| 1 | `test_loan_requires_due_date_after_loan_date` | 2 (−) |
-| 2 | `test_loan_created_with_valid_data` | 3 (+) |
-
-**Cadena de RED del test 1:** un solo test de `Loan` fuerza 4 cambios antes
-de llegar al assert real. Es el mismo patrón que usamos con `Book` (Decisión
-3.1): el test falla sobre el primer nombre no definido. La diferencia es que
-aquí los primeros errores son `TypeError`, no `NameError`, porque `book_id` y
-`user_id` fuerzan a que `Book` y `User` ganen un campo `id`.
-
-```python
-def test_loan_requires_due_date_after_loan_date():
-    with pytest.raises(LoanError):
-        Loan(book_id=1, user_id=1, loan_date=date.today(), due_date=date.today())
-```
-
-| # | Error real | Causa | Qué crear |
-|---|-----------|-------|-----------|
-| 1 | `TypeError: Book.__init__() got unexpected keyword argument 'id'` | `Loan` necesita `book_id=1` pero `Book` no tiene `id` | Añadir `id: BookID \| None = None` a `Book` |
-| 2 | `TypeError: User.__init__() got unexpected keyword argument 'id'` | Ídem para `User` | Añadir `id: UserID \| None = None` a `User` |
-| 3 | `NameError: name 'LoanError' is not defined` | No existe la excepción | Crear `class LoanError(LibraryApiError): pass` |
-| 4 | `NameError: name 'Loan' is not defined` | No existe la clase | Crear `@dataclass class Loan: ...` mínima |
-| 5 | `Failed: DID NOT RAISE LoanError` | `Loan` no tiene validación aún | Añadir `__post_init__` con validación `due_date` |
-| 6 | ✅ GREEN | — | — |
-
-> Los pasos 1 y 2 **no son tests de `id`** — no escribimos `test_book_has_id`
-> ni `test_user_has_id`. Es el test de `Loan` forzando a que `Book` y `User`
-> crezcan. Verificación por uso (ver apéndice, tabla de detección temprana).
-
-**Lectura del nombre del test:**
-
-```
-test_loan_requires_due_date_after_loan_date
-│          │         │
-│          │         └── due_date > loan_date (la invariante)
-│          └── "el préstamo exige que…"
-└── entidad bajo test
-```
-
-El nombre no dice «debe existir el atributo `due_date`» — eso se verifica por
-uso en el test positivo. El nombre describe la invariante de dominio: la fecha
-límite de devolución (`due_date`) debe ser posterior a la fecha de préstamo
-(`loan_date`).
-
-**¿Por qué `due_date` y no `return_date` en el test negativo?**
-
-| | `due_date` | `return_date` |
-|---|---|---|
-| Naturaleza | Promesa (fecha límite) | Hecho consumado (fecha real) |
-| Se fija en | Creación del préstamo | `return_book()` (transición) |
-| Invariante en creación | `> loan_date` | Ninguna — es `None` por definición |
-
-`return_date` en creación siempre es `None` — no hay nada que validar. Su
-invariante (`> loan_date`) se verifica en un test de transición, cuando se
-ejecuta `return_book()`, no en uno de creación. Por eso el test negativo de
-creación protege `due_date`, no `return_date`.
-
-### Decisión 4.4 — `due_date` con `field(init=False)`: de validación runtime a invariante estructural
-
-**Punto de partida — el test incompleto:**
-
-El primer test de Loan se escribió con la intención de validar que
-`due_date` debe ser posterior a `loan_date`. Quedó incompleto porque
-faltaba cerrar la llamada a `Loan()` dentro del `with pytest.raises`:
-
-```python
-# Versión original incompleta
-def test_loan_date_requires_due_date_after_loan_date():
-    with pytest.raises(LoanError):
-        loan = Loan(1, 1, )
-        loan_date >= return_date
-```
-
-La lógica era correcta: crear un `Loan` con `due_date` igual o anterior a
-`loan_date` debía lanzar `LoanError`. El test debía ser:
-
-```python
-# Versión que se pretendía escribir
-def test_loan_requires_due_date_after_loan_date():
-    with pytest.raises(LoanError):
-        Loan(book_id=1, user_id=1, due_date=date.today(), loan_date=date.today())
-```
-
-**La pregunta que cambió el rumbo:** al revisar cómo crear `loan_date` y
-`due_date`, surgió la cuestión: ¿`due_date` se pasa desde fuera o se calcula
-automáticamente como `loan_date + 30 días`?
-
-Se evaluaron dos opciones:
-
-| Opción | `due_date` | Constructor | Flexibilidad |
-|--------|-----------|-------------|-------------|
-| A | `field(init=False)` — calculado siempre +30 | `Loan(book_id, user_id)` | Ninguna — 30 días fijos |
-| B | Parámetro con default `None` → +30 si no se pasa | `Loan(book_id, user_id, due_date=...)` | El caller puede pasar otra duración |
-
-Se eligió la **Opción A** para Stage 1: más simple, elimina la ambigüedad de
-«¿quién decide la duración del préstamo?», y hace imposible el estado inválido
-por construcción.
-
-**La clase `Loan` resultante:**
-
-```python
-from datetime import date, timedelta
-from dataclasses import dataclass, field
-
-@dataclass
-class Loan:
-    book_id: BookID
-    user_id: UserID
-    loan_date: date = field(default_factory=date.today)
-    return_date: date | None = None
-    loan_id: LoanID | None = None
-    due_date: date = field(init=False)          # ← no es parámetro, va al final
-
-    def __post_init__(self):
-        self.due_date = self.loan_date + timedelta(days=30)
-```
-
-**Por qué `init=False` y no `default_factory`:**
-
-Podrías pensar en usar `default_factory` con una lambda para calcular
-`due_date` automáticamente:
-
-```python
-# ❌ NO funciona
-due_date: date = field(default_factory=lambda: loan_date + timedelta(days=30))
-```
-
-El problema es simple: `loan_date` no existe en ese scope. La lambda se
-ejecuta sola, sin contexto, sin `self`. Es literalmente como escribir
-`loan_date + timedelta(days=30)` en una línea suelta de Python — da
-`NameError`. No es que «no vea otros campos» como concepto abstracto:
-es que la variable no está definida ahí.
-
-Con `init=False` + `__post_init__`, para cuando `__post_init__` se ejecuta,
-`self.loan_date` ya tiene valor (lo asignó el `__init__` automático). Por
-eso funciona.
-
-> ⚠️ **Orden de campos:** `due_date` va al final de la clase, después de todos
-> los campos con default. Aunque `init=False` lo excluye del constructor,
-> Python lo cuenta como «campo sin default» para la validación de orden.
-> Ponerlo entre `loan_date` (con default) y `return_date` (con default)
-> produce `TypeError: non-default argument 'due_date' follows default argument`.
-
-**Consecuencia en los tests — del negativo al positivo:**
-
-El test negativo original (`test_loan_requires_due_date_after_loan_date`)
-ya no tiene razón de ser. Con `init=False`, `due_date` siempre se calcula
-como `loan_date + 30`. No existe forma de pasar un `due_date` inválido porque
-**no existe forma de pasar `due_date` en absoluto**. La validación pasó de ser
-runtime (`if due_date <= loan_date: raise LoanError`) a ser estructural:
-está garantizada por cómo se construye el objeto.
-
-En su lugar nace un test positivo:
-
-```python
-from datetime import timedelta
-
-from app.models import Loan
-
-
-def test_loan_due_date_is_loan_date_plus_30_days():
-    loan = Loan(book_id=1, user_id=1)
-    assert loan.due_date == loan.loan_date + timedelta(days=30)
-```
-
-**Qué verifica el test:** un único assert que comprueba la relación
-`due_date == loan_date + 30`. No necesita fecha hardcodeada porque en Stage 1
-no existe ningún camino donde `loan_date` sea distinto de `date.today()`.
-Ver la Decisión 4.5 para el razonamiento completo.
-
-**`LoanError` tras este cambio:**
-
-Con la Opción A, `Loan` no tiene ninguna validación runtime. `LoanError`
-queda definida como clase pero ningún código la lanza. En TDD puro, si
-ningún test espera una excepción, esa excepción no debe existir. Se elimina.
-Volverá a nacer cuando el primer test negativo de `Loan` (devoluciones,
-préstamo duplicado) la exija.
-
-**Qué enseña esta decisión sobre diseño de entidades:**
-
-Cuando una invariante «X debe ser mayor que Y» se cumple siempre porque X
-se calcula a partir de Y, has encontrado una **invariante estructural**, no
-de negocio. Las invariantes estructurales no se testean con negativos — se
-testean con positivos que verifican el cálculo. Las invariantes de negocio
-(«un libro prestado no puede prestarse otra vez») sí necesitan test negativo
-porque dependen de decisiones externas (alguien llamó a `loan()` dos veces).
-
-> **Regla:** si puedes hacer imposible un estado inválido por construcción,
-> hacelo. Es más barato que vigilarlo con tests.
-
-### Decisión 4.5 — Un solo test: eliminación del test con fecha hardcodeada
-
-El test con fecha explícita (`loan_date=date(2026, 1, 1)`) se escribió por
-inercia de triangulación: «dos puntos de datos fuerzan la solución general,
-pongamos uno con fecha explícita y otro con default». Pero la triangulación
-solo tiene sentido cuando cada punto de datos por separado admite una solución
-hardcodeada distinta. Aquí no: en Stage 1, `loan_date` siempre es
-`date.today()`. No existe ningún flujo donde `loan_date` tome otro valor.
-
-**El error:** se aplicó el patrón de triangulación sin verificar si el
-segundo punto de datos realmente fuerza algo que el primero no pueda forzar.
-El test con fecha hardcodeada protegía contra una implementación tramposa
-(`self.due_date = date.today() + 30` en vez de `self.loan_date + 30`) que,
-como `loan_date` siempre coincide con `date.today()` en la práctica del
-Stage 1, nunca se manifestaría como bug. Es triangulación vacía: el segundo
-punto de datos no añade cobertura real.
-
-**El test final:**
-
-```python
-from datetime import timedelta
-
-from app.models import Loan
-
-
-def test_loan_due_date_is_loan_date_plus_30_days():
-    loan = Loan(book_id=1, user_id=1)
-    assert loan.due_date == loan.loan_date + timedelta(days=30)
-```
-
-Un solo test que verifica la relación que importa: `due_date` depende de
-`loan_date`, sea cual sea. Si alguien rompe esa relación, el test falla.
-No necesita fecha hardcodeada porque no hay ningún camino por el que
-`loan_date` tome otro valor.
-
-> **Principio:** si no hay caso de uso para `loan_date != date.today()`,
-> el test con fecha hardcodeada es ruido. La triangulación no se aplica
-> mecánicamente: requiere que existan al menos dos caminos de ejecución
-> distintos que ejerciten la misma invariante.
 
 ### Decisión 4.6 — Test de creación completa: consistencia con Book y User
 
@@ -1156,7 +906,7 @@ def test_user_created_with_valid_data():
     assert user.email.value == "hector@gmail.com"
 ```
 
-`Loan` no tenía el suyo. El test existente solo verificaba `due_date`.
+`Loan` no tenía el suyo.
 Se añade:
 
 ```python
@@ -1177,7 +927,7 @@ def test_loan_created_with_valid_data():
 **Qué verifica cada assert:**
 
 | Atributo | Assert | Qué garantiza |
-|----------|--------|---------------|
+| ---------- | -------- | --------------- |
 | `book_id` | `== 1` | El ID pasado se conserva |
 | `user_id` | `== 1` | Ídem |
 | `loan_date` | `== date.today()` | El default `date.today()` se aplica correctamente |
@@ -1186,17 +936,29 @@ def test_loan_created_with_valid_data():
 
 **Por qué `loan_date == date.today()` y no un valor hardcodeado:**
 
-Igual que `test_book_created_with_valid_data` no pasa `is_available=True`
-explícitamente —usa el default y lo verifica—, este test no pasa `loan_date`
-explícitamente. Hardcodear `loan_date=date(2026, 1, 1)` repetiría el error de
-la Decisión 4.5: añadir un valor explícito sin un caso de uso real que lo
-ejerza. El default `date.today()` es parte del contrato público de `Loan`,
+Igual que `test_book_created_with_valid_data` no recibe explícitamente
+`is_available=True` —usa el default y lo verifica—, este test no recibe
+explícitamente `loan_date`. Hardcodear `loan_date=date(2026, 1, 1)` sería
+un error: añadir un valor explícito sin un caso de uso real que lo ejerza.
+El default `date.today()` es parte del contrato público de `Loan`,
 exactamente igual que `is_available=True` lo es de `Book`.
 
-> **Regla de consistencia:** el test de creación completa de una entidad
-> debe pasar solo los parámetros obligatorios (sin repetir los defaults)
-> y verificar todos los atributos visibles, incluyendo los que tienen
-> default. Si el default cambia, el test lo detecta.
+> **Regla de consistencia:** en el test de creación de una entidad, el
+> constructor recibe solo los parámetros sin default. Los atributos con
+> default no se pasan en la llamada, pero sí se verifican en los asserts.
+> Así, si alguien cambia un valor por defecto en el modelo, el test lo
+> detecta.
+>
+> ```python
+> # Constructor: solo parámetros obligatorios
+> book = Book("Dune", "Herbert")
+>
+> # Asserts: todos los atributos, incluidos los que vienen por default
+> assert book.title == "Dune"
+> assert book.author == "Herbert"
+> assert book.is_available is True   # default verificado, no pasado
+> assert book.book_id is None        # ídem
+> ```
 
 ### Guía de diseño de entidades — las 5 preguntas
 
@@ -1236,12 +998,12 @@ positivo).
 **Ficha resumen:**
 
 | Pregunta | Ejemplo con Loan |
-|----------|-----------------|
+| ---------- | ----------------- |
 | ¿Qué conecta y cómo? | `Book` + `User`, por ID (`book_id`, `user_id`) |
 | ¿Atributos propios? | `loan_date`, `due_date`, `return_date` |
 | ¿Invariante? | Estructural: `due_date = loan_date + 30` (garantizada por construcción). Negocio: `return_date` no puede ser anterior a `loan_date` (protegida con test negativo en 4.8). |
 | ¿Atributos falsos? | `days` (derivable de `due_date - loan_date`) |
-| ¿Tests? | 2 positivos + 1 negativo (ver 4.4, 4.5, 4.6 y 4.8) |
+| ¿Tests? | 2 positivos + 1 negativo (ver 4.6, 4.7 y 4.8) |
 
 ### Decisión 4.7 — `due_date` como `@property` en vez de `field(init=False)`
 
@@ -1301,10 +1063,10 @@ def test_loan_rejects_return_date_before_loan_date():
         Loan(book_id=1, user_id=1, return_date=date.today() - timedelta(days=1))
 ```
 
-**Por qué `LoanError` reaparece:** en la Decisión 4.4 se eliminó `LoanError`
-porque ninguna validación runtime la lanzaba. Esta nueva invariante la hace
-necesaria de nuevo. `LoanError` nace ahora de un test negativo concreto, no
-de una anticipación de diseño.
+**Por qué `LoanError` reaparece:** `LoanError` se eliminó porque ninguna
+validación runtime la lanzaba. Esta nueva invariante la hace necesaria de
+nuevo. `LoanError` nace ahora de un test negativo concreto, no de una
+anticipación de diseño.
 
 **Por qué `match=` en `pytest.raises`:** el parámetro `match` verifica
 que el mensaje de la excepción contenga el texto esperado. Esto hace el
@@ -1320,7 +1082,7 @@ el tipo de excepción, no el motivo.
 > documentan cuando se reconocen. Esta sección crece con el proyecto.
 
 | Patrón / Principio | Fuente | Dónde aparece | Qué resuelve |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | **Value Object** | DDD (Eric Evans) | `Email` | Objeto sin identidad, inmutable, igualdad por valor |
 | **Entity** | DDD (Eric Evans) | `Book` | Objeto con identidad (ID futuro), muta estado |
 | **CQS** | Bertrand Meyer | `can_be_loaned()` vs `loan()` | Las preguntas nunca fallan; las acciones sí pueden |
@@ -1331,9 +1093,7 @@ el tipo de excepción, no el motivo.
 > **Distinción importante:** OOP da la sintaxis (clases, herencia). DDD da el
 > significado (¿esto se identifica por valor o por ID?). Value Object y Entity
 > no son conceptos de OOP — nacen del diseño guiado por el dominio.
-
-> Esta sección es la referencia práctica. Leela cuando vayas a escribir código.
-> Las decisiones de arriba explican el porqué de cada regla; aquí está el cómo.
+> Para ver cómo se aplican estos patrones paso a paso, consultá el Apéndice.
 
 ---
 
@@ -1358,11 +1118,13 @@ def mark_as_returned(self):
     self.is_available = True
 ```
 
-**Por qué:** completan el row 5 (transiciones de estado) de la tabla de
-progreso. Son comandos CQS — mutan estado sin devolver valor. La versión
-inicial de `mark_as_loaned()` retornaba `self.is_available`, que tras la
-asignación siempre era `False` (un no-op informativo). El test ya verifica
-el cambio de estado con `can_be_loaned()`, así que el retorno era redundante.
+**Por qué:** `Book` necesitaba métodos para cambiar de disponible a prestado
+y viceversa. No devuelven valor porque siguen el principio CQS
+(Command-Query Separation): los comandos mutan estado, las consultas lo
+devuelven. El estado se consulta aparte con `can_be_loaned()`. La primera
+versión de `mark_as_loaned()` retornaba `self.is_available`, pero tras
+marcarlo como prestado ese valor siempre era `False` — el retorno no
+aportaba nada.
 
 **Tests asociados:**
 
@@ -1428,7 +1190,7 @@ def mark_as_returned(self, return_date: date | None = None) -> None:
 **Por qué:** la discusión de diseño evaluó dos opciones:
 
 | Opción | Firma | Ventaja | Desventaja |
-|--------|-------|---------|------------|
+| -------- | ------- | --------- | ------------ |
 | Sin parámetro | `mark_as_returned(self)` | Consistente con `Book.mark_as_returned()` | No permite backdating |
 | Con parámetro opcional | `mark_as_returned(self, return_date=None)` | Permite corregir devoluciones no registradas a tiempo | Asimetría con `Book` |
 
@@ -1443,13 +1205,17 @@ no obliga a nadie a usarlo — el 99% de llamadas serán sin argumento.
 # ✅ is not None — solo reemplaza cuando es exactamente None
 self.return_date = return_date if return_date is not None else date.today()
 
-# ❌ or — cualquier valor falsy (None, 0, "", []) dispara el default
+# ❌ or — cualquier valor falsy dispara el default
 self.return_date = return_date or date.today()
 ```
 
-`or` funciona en este caso concreto porque el tipo es `date | None`, pero
-`is not None` es más preciso y Pyright lo verifica mejor. En código
-profesional, `is not None` es preferible porque no oculta bugs de tipo.
+Con `or`, Python evalúa `return_date` como booleano. Si es `None`, `0`, `""`,
+`[]` o `False`, el `or` lo descarta y asigna `date.today()`. En este caso
+concreto funciona porque `date` nunca es falsy, pero si el tipo del parámetro
+cambiara a `int | None`, pasar `return_date=0` asignaría `date.today()` en vez
+de `0` — un bug silencioso. `is not None` es explícito: solo reemplaza cuando
+el valor es exactamente `None`, sin importar el tipo. En código profesional se
+prefiere por precisión y porque no deja espacio a errores de interpretación.
 
 **Test asociado:**
 
@@ -1469,7 +1235,7 @@ no. Es una diferencia deliberada.
 fecha pertenece al préstamo, no al libro. Son dominios distintos:
 
 | Comando | Entidad | ¿Parámetro? | Motivo |
-|---------|---------|:---:|---|
+| --------- | --------- | :---: | --- |
 | `mark_as_loaned()` | `Book` | No | Solo hay una forma de prestar un libro |
 | `mark_as_returned()` | `Book` | No | Solo hay una forma de devolverlo |
 | `mark_as_returned()` | `Loan` | `return_date` opcional | La fecha de devolución puede no coincidir con hoy |
@@ -1479,7 +1245,7 @@ No hay inconsistencia — hay modelado fiel al dominio.
 ### Tabla de progreso actualizada
 
 | Paso | Book | User | Loan |
-|------|------|------|------|
+| ------ | ------ | ------ | ------ |
 | 2. Negativos de creación | ✅ | ✅ | No aplica |
 | 3. Positivo de creación | ✅ | ✅ | ✅ |
 | 4. Consulta de estado | `can_be_loaned()` ✅ | No aplica | `due_date` ✅ |
@@ -1500,17 +1266,29 @@ Sesión de proceso y documentación. El foco fue cerrar un bucle de control que
 quedó abierto desde Sesión 1: ¿cómo garantizamos que `openspec/config.yaml`
 —la fuente de verdad que todos los agentes consultan— no se desactualiza?
 
-### Decisión 6.1 — Session startup integrity check en AGENTS.md
+### Decisión 6.1 — config.yaml integrity check
 
-**Qué:** se añadió una nueva sección en `AGENTS.md` (`Session startup — config.yaml
-integrity check`) que obliga a verificar 5 campos de `config.yaml` contra la
-realidad del disco **al inicio de cada sesión**, antes de cualquier trabajo.
+**Qué:** se añadió una verificación de `config.yaml` en dos momentos:
 
-**Por qué:** `AGENTS.md` se inyecta en el system prompt al iniciar cada sesión.
-Es el lugar natural para una regla proactiva. El anti-patrón #6 ya detectaba
-el problema (stale artifact) pero era reactivo — solo se activaba si la IA
-"olía" inconsistencia. La nueva regla cierra el bucle: **verificación
-obligatoria al inicio** + **detección reactiva durante la sesión**.
+- **Al cerrar una sesión que modificó `src/`** (producción o tests). La sesión
+  que ensució el config es la que lo limpia.
+- **Antes de cualquier fase o subagente SDD.** Es la red de seguridad por si
+  el cierre anterior no lo hizo.
+
+Las sesiones de solo lectura, revisión de docs o conversación no necesitan
+este check.
+
+**Refinamiento (originalmente Sesión 7):** la primera versión ejecutaba el
+check al inicio de cada sesión, lo que resultó excesivo con sesiones más
+cortas y frecuentes. También se descubrió que sin un gate de precedencia
+explícito, el agente podía saltarse el check si el usuario pedía algo
+directamente. La versión actual elimina ambos problemas.
+
+**Lección aprendida:** las reglas en `AGENTS.md` compiten con el input del
+usuario y se diluyen en sesiones largas. Afirmar que el «contexto pasivo se
+aplica solo» es falso — el voseo aparece igual, se commitea sin test previo.
+Para el análisis completo de por qué fallan las reglas y cómo mitigarlo, ver
+`project_docs/config-map.md`.
 
 **Campos verificados:**
 
@@ -1526,51 +1304,16 @@ También se verifican `test_status.coverage_percent`,
 `test_status.last_verified`, `domain.entities[*].behavior`, y
 `domain.exceptions.hierarchy`.
 
-### Decisión 6.2 — El integrity check en AGENTS.md es suficiente; no se necesita tooling adicional
+### Decisión 6.2 — Documentación de fuentes de verdad consolidada
 
-**Qué:** se descartaron mecanismos externos (pre-commit hook, CI check, script
-`sync-config`) porque el session startup integrity check en `AGENTS.md` ya
-cubre la necesidad: el agente ejecuta la verificación automáticamente al
-inicio de cada sesión, sin intervención humana.
-
-**Por qué:** añadir hooks o scripts sería redundante — un segundo portero en
-una puerta que ya tiene uno. Con 2 archivos fuente y 17 tests, el check tarda
-30 segundos. Si en stages futuros el archivo crece y el check se vuelve lento,
-se reconsiderará.
-
-### Correcciones aplicadas en esta sesión
-
-Se detectaron 6 campos stale en `config.yaml` que nadie había notado porque
-nunca se verificaban explícitamente:
-
-| Campo | Antes | Ahora |
-|---|---|---|
-| `git_head` | `02e4f0f` | `1e6ca63` |
-| `total_tests` | `12` | `17` |
-| `passing` | `12` | `17` |
-| `last_verified` | `2026-07-10` | `2026-07-11` |
-| `models.py` line count | 84 | 106 |
-| `domain.exceptions.hierarchy` | 4 clases planas | 6 clases con subclases reales |
-| `domain.entities[0].behavior` (Book) | `[can_be_loaned, mark_as_loaned]` | + `mark_as_returned` |
-| `domain.entities[2].behavior` (Loan) | (no existía) | `[is_active, mark_as_returned]` |
-
-### Corrección retrospectiva: Sesión 5
-
-La tabla de progreso de Sesión 5 marcaba los casos límite de Book como
-"Falta", cuando en realidad ya estaban implementados y commiteados en esa
-misma sesión (`BookAlreadyLoanedError`, `BookNotLoanedError` con sus tests
-`test_cannot_mark_as_loaned_twice` y `test_cannot_mark_as_returned_when_available`).
-Se corrigió la tabla para reflejar ✅.
-
-### Decisión 6.3 — Apéndice F ampliado
-
-**Qué:** se expandió el Apéndice F con la explicación detallada de los tres
+**Qué:** se consolidó la documentación de los tres
 propósitos de `config.yaml` (ground truth para IA, verificación de honestidad
 para el humano, configuración del flujo SDD) y la tabla de "quién usa qué".
 
 **Por qué:** la información existía dispersa entre `AGENTS.md` (anti-patrón #6)
 y el propio `config.yaml` (comentarios), pero no estaba consolidada en ningún
-lado. El Apéndice F es el lugar canónico para documentar fuentes de verdad.
+lado. `AGENTS.md` y `config.yaml` son ahora las fuentes canónicas para documentar
+fuentes de verdad.
 
 ### Estado actual del proyecto (fin Sesión 6)
 
@@ -1584,119 +1327,6 @@ lado. El Apéndice F es el lugar canónico para documentar fuentes de verdad.
   compleción de Stage 1
 
     ---
-
-## Sesión 7 — Gate de precedencia para el integrity check
-
-> Fecha: 11 julio 2026
-
-Sesión de corrección de un fallo en el mecanismo de control de la Sesión 6:
-el integrity check no se estaba ejecutando automáticamente al iniciar `pi`.
-
-### Decisión 7.1 — El integrity check necesita un gate de precedencia, no una instrucción temporal
-
-**Qué:** se ajustó la redacción del integrity check en `AGENTS.md` para
-convertirlo en una regla de precedencia dura, y se documentó por qué la
-redacción anterior no garantizaba su ejecución automática.
-
-**Por qué:** cuando ejecutas `pi` en el directorio del proyecto, el harness
-construye el system prompt con `AGENTS.md`, Engram carga la memoria de sesiones
-pasadas, y Gentle Pi configura el contrato SDD. Pero el agente no se activa
-hasta que escribes en la TUI. El integrity check estaba redactado como «At the
-start of every session, before any work begins», lo que sugiere que ocurre al
-abrir `pi`. No es así: ocurre en el primer turno, y solo si el agente lo
-prioriza sobre lo que hayas escrito. Si tu primer mensaje es «añade un test»,
-el agente tiene dos instrucciones en su prompt —verificar y escribir el test—
-y sin una regla explícita de precedencia, puede saltarse el check y atender
-directamente tu petición. La redacción nueva elimina esta ambigüedad: el check
-va primero siempre, sin importar lo que escribas.
-
-**Dónde:** `AGENTS.md` — sección «Session startup — config.yaml integrity
-check».
-
-**Aprendido:**
-
-- Pi no tiene un bucle autónomo ni un scheduler. El agente solo actúa cuando
-escribes en la TUI. No hay actividad entre que el proceso arranca y tu primer
-mensaje.
-- Engram recuerda decisiones y contexto, pero no puede disparar acciones. El
-agente consulta memoria en respuesta a tu input, no por iniciativa propia.
-- Las reglas en `AGENTS.md` se evalúan en cada turno, pero compiten con tu
-petición. Si la regla dice «al inicio» o «antes de», pero no establece
-precedencia explícita, el agente puede decidir atender tu petición primero.
-- Solución: redactar como gate — «regardless of what the user's first message
-asks, run this check before addressing their request».
-
-**Corrección adicional:** se detectó que `AGENTS.md` declaraba Python 3.13,
-pero el sistema y `config.yaml` ya usaban 3.14.4. Se corrigió a 3.14.
-
-### Decisión 7.2 — Con la nueva redacción, cualquier prompt dispara el check
-
-Con la nueva redacción en el `AGENTS.md`, **cualquier prompt** sirve. No
-necesitas uno especial. Puedes arrancar directo con «añade un test para
-devolver libro» o «revisa el modelo de Loan» y el integrity check se ejecutará
-primero de todas formas.
-
-Ese es justo el punto de convertirlo en un gate de precedencia dura: que no
-tengas que recordar dispararlo manualmente ni usar un prompt de inicio
-específico.
-
-Antes —con la redacción anterior— el escenario ideal era que tu primer mensaje
-fuera algo genérico como «hola» o «empecemos» para dar espacio a que el check
-ocurriera sin competencia. Pero eso es frágil y depende de que lo recuerdes. La
-corrección lo vuelve innecesario.
-
-### Decisión 7.3 — Solo el integrity check necesita gate; el resto del AGENTS.md es contexto pasivo
-
-El `AGENTS.md` tiene dos tipos de contenido y solo uno necesita el gate.
-
-**Contexto pasivo** — se aplica solo, sin acción:
-
-- Convenciones de código (`dataclass`, `snake_case`, `X | None`)
-- Regla TDD estricta
-- Jerarquía de excepciones
-- Comandos del proyecto
-- Idioma (inglés para código, español neutro para conversación)
-- Política de carga de docs («para X carga Y»)
-
-Todo esto está en el system prompt. El agente no necesita «ejecutarlo» —
-simplemente condiciona cada respuesta. Si pides un test, el agente ya sabe que
-debe ser inglés, con dataclasses, siguiendo TDD. No hay decisión que tomar.
-
-**Acción proactiva** — requiere invocar herramientas:
-
-- Integrity check: ejecutar `git rev-parse`, `pytest`, `python --version`,
-`git branch`, `ls`, leer `config.yaml`, comparar, corregir.
-
-Esta es la única instrucción del `AGENTS.md` que exige que el agente haga algo
-por iniciativa propia en un momento concreto (primer turno). Las demás son
-restricciones que se aplican pasivamente.
-
-Los anti-patrones (punto 6) son un caso intermedio: son condicionales. No
-necesitan gate de primer turno porque se disparan cuando el agente detecta el
-patrón durante el trabajo, no al inicio.
-
-Así que no, no es necesario extender el mandatory first a todo el `AGENTS.md`.
-Solo a las instrucciones que requieren acción proactiva en un momento
-específico, y de momento solo hay una: el integrity check.
-
-### Lo que NO puede hacer el agente
-
-Esta sesión dejó claro el modelo real de ejecución de Pi + Gentle Pi:
-
-- Pi no tiene un bucle autónomo ni un scheduler. El agente solo actúa cuando
-el usuario escribe en la TUI.
-- Engram recuerda decisiones y contexto entre sesiones, pero no puede disparar
-acciones. El agente consulta memoria en respuesta al input, no por iniciativa
-propia.
-- Los subagentes se invocan durante un turno, no antes.
-- Las instrucciones en `AGENTS.md` se evalúan en cada turno, pero compiten en
-igualdad de condiciones con la petición explícita del usuario.
-
-Esto no es una limitación que haya que resolver con más tooling. Es la
-arquitectura del sistema. La disciplina está en cómo se redactan las reglas
-para que funcionen dentro de esta arquitectura.
-
----
 
 ## Sesión 8 — Diseño del repositorio (Protocol + InMemory)
 
@@ -1749,7 +1379,7 @@ tests necesitan para demostrar swappability.
 Dos opciones:
 
 | Opción | Cómo funciona | Problema |
-|---|---|---|
+| --- | --- | --- |
 | Caller pasa el ID | `repo.add_book(book)` donde `book.book_id=5` | Nada impide colisiones |
 | Repo asigna el ID | `book_id = repo.add_book(book)` devuelve un ID nuevo | — |
 
@@ -1843,7 +1473,9 @@ aislamiento total. Ver `project_docs/python-theory.md` para más detalle.
 
 ---
 
-# Parte II — Decisiones de infraestructura y herramientas
+## Parte-II
+
+Decisiones de infraestructura y herramientas
 
 ---
 
@@ -1875,7 +1507,7 @@ verifica al empujar). Si el hook da un falso positivo (cambio cosmético),
 ### Las tres preguntas que llevaron a esta decisión
 
 | Pregunta | Respuesta |
-|---|---|
+| --- | --- |
 | ¿Hooks en vez de extensiones para Python? | **Sí.** Las extensiones de Pi son TypeScript. Un proyecto Python no debería depender de una pila TS para enforcement de git. |
 | ¿Un hook para work-unit-commits? | **Sí.** Es la única regla del TDD que se puede codificar sin criterio humano. Las demás (triangulación, refactor, orden RED→GREEN) requieren juicio — para eso está el Gentleman. |
 | ¿En pre-commit o pre-push? | **Pre-push.** Tipado y formato (pyright, ruff) deben bloquear el commit. La disciplina de tests se verifica al empujar. Separar capas evita que un falso positivo del hook de tests te obligue a saltarte también pyright. |
@@ -1883,14 +1515,14 @@ verifica al empujar). Si el hook da un falso positivo (cambio cosmético),
 ### Qué se creó
 
 | Archivo | Rol |
-|---|---|
+| --- | --- |
 | `scripts/check_tests.py` | Script Python que implementa la regla binaria: cambios en `src/app/` → cambios en `src/tests/` requeridos. |
 | `.pre-commit-config.yaml` | Nuevo hook `check-tests` con `stages: [pre-push]`. |
 
 ### Comportamiento verificado
 
 | Escenario | Resultado |
-|---|---|
+| --- | --- |
 | Sin cambios en producción | ✅ Pass (skip) |
 | Producción sin tests | ❌ Bloquea — mensaje claro con los archivos ofensores |
 | Producción + tests | ✅ Pass |
@@ -1904,7 +1536,7 @@ un archivo en `src/tests/` si hay al menos uno en `src/app/`.
 **No verifica:**
 
 | No verifica… | Porque… |
-|---|---|
+| --- | --- |
 | Que el test corresponde al método cambiado | Requiere entender el código — criterio humano |
 | Que hay un test por cada función o clase nueva | Ídem |
 | Cobertura de líneas o ramas | Herramienta aparte: `pytest --cov` |
@@ -1913,7 +1545,7 @@ un archivo en `src/tests/` si hay al menos uno en `src/app/`.
 
 **Ejemplo concreto** que aclara la granularidad:
 
-```
+```text
 Cambias models.py para añadir User entity.
 Stageas src/app/models.py + src/tests/test_user.py
 
@@ -1936,7 +1568,7 @@ ejecutan en stages distintos.
 **Casos legítimos:**
 
 | Escenario | ¿Legítimo? | Por qué |
-|---|---|---|
+| --- | --- | --- |
 | Cambiaste un docstring/typo en `models.py`, sin tests necesarios | ✅ Sí | Falso positivo del hook — no hay comportamiento que testear |
 | Arreglaste un comentario, Pyright y Ruff ya pasaron en el commit | ✅ Sí | La corrección ya está verificada |
 | Te saltas `check-tests` porque no escribiste tests | ❌ No | Estás violando TDD — el hook está funcionando exactamente como debe |
@@ -1948,7 +1580,7 @@ ejecutan en stages distintos.
 ### La foto completa de los hooks, sin ambigüedad
 
 | Componente | Ubicación | Qué es |
-|---|---|---|
+| --- | --- | --- |
 | Configuración de hooks | `library-api/.pre-commit-config.yaml` | **Un solo archivo.** Define 7 hooks, algunos en `pre-commit`, uno en `pre-push` |
 | Script `pre-commit` | `.git/hooks/pre-commit` | Generado por `pre-commit install`. Delega al framework |
 | Script `pre-push` | `.git/hooks/pre-push` | Generado por `pre-commit install --hook-type pre-push`. Ídem |
@@ -1957,7 +1589,7 @@ ejecutan en stages distintos.
 
 **Flujo real:**
 
-```
+```text
 git commit
   └─→ .git/hooks/pre-commit
        └─→ pre-commit framework
@@ -2064,7 +1696,7 @@ de fuentes confiables).
 runtime. Ninguno resultó suficiente por sí solo:
 
 | Mecanismo | ¿Protege comandos destructivos? | ¿Protege lecturas sensibles? | ¿Protege skills maliciosas? |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Project Trust (Pi) | No — solo controla carga de `.pi/` | No | No — aplica a proyecto local, no a skills globales |
 | `--no-extensions` | No — es binario, todo o nada | No | No — desactiva extensiones, no skills |
 | `--offline` | No | No | Parcial — pero inhabilita búsquedas web legítimas |
@@ -2238,39 +1870,39 @@ malicioso ejecuta código al instalarse, sin necesidad de importarlo.
 
 ### I3.3 — `allow-git=none`
 
-    **Qué:** se configura `allow-git=none`. npm rechaza dependencias instaladas
-    directamente desde repositorios git.
+**Qué:** se configura `allow-git=none`. npm rechaza dependencias instaladas
+directamente desde repositorios git.
 
-    **Por qué:** una dependencia git puede incluir un `.npmrc` que sobreescribe
-    el path a `git` y ejecuta código durante el install, incluso con
-    `--ignore-scripts`. Es el vector más potente de los tres porque burla
-    `ignore-scripts`.
+**Por qué:** una dependencia git puede incluir un `.npmrc` que sobreescribe
+el path a `git` y ejecuta código durante el install, incluso con
+`--ignore-scripts`. Es el vector más potente de los tres porque burla
+`ignore-scripts`.
 
-    ### I3.4 — `engine-strict=true`
+### I3.4 — `engine-strict=true`
 
-    **Qué:** se configura `engine-strict=true`. npm rechaza paquetes cuyo
-    `engines` en `package.json` no coincida con la versión de Node instalada.
+**Qué:** se configura `engine-strict=true`. npm rechaza paquetes cuyo
+`engines` en `package.json` no coincida con la versión de Node instalada.
 
-    **Por qué:** protege contra paquetes abandonados o incompatibles que pueden
-    causar comportamientos impredecibles. No es defensa antimalware pero sí
-    contra degradación silenciosa del entorno.
+**Por qué:** protege contra paquetes abandonados o incompatibles que pueden
+causar comportamientos impredecibles. No es defensa antimalware pero sí
+contra degradación silenciosa del entorno.
 
-    ### I3.5 — Configuraciones evaluadas y no aplicadas
+### I3.5 — Configuraciones evaluadas y no aplicadas
 
-    - **`audit=true`**: ya es default en npm 11. Reporta CVEs documentados pero
-      no detecta malware (un paquete malicioso sin CVE aparece limpio).
-    - **`fund=false`**: cosmético — suprime los mensajes de funding.
-      Sin impacto en seguridad.
+- **`audit=true`**: ya es default en npm 11. Reporta CVEs documentados pero
+  no detecta malware (un paquete malicioso sin CVE aparece limpio).
+- **`fund=false`**: cosmético — suprime los mensajes de funding.
+  Sin impacto en seguridad.
 
-    ### Verificación conjunta
+### Verificación conjunta
 
-    ```bash
-    npm config list | grep -E "ignore-scripts|min-release-age|allow-git|engine-strict"
-    # allow-git = "none"
-    # engine-strict = true
-    # ignore-scripts = true
-    # min-release-age = 3
-    ```
+```bash
+npm config list | grep -E "ignore-scripts|min-release-age|allow-git|engine-strict"
+# allow-git = "none"
+# engine-strict = true
+# ignore-scripts = true
+# min-release-age = 3
+```
 
 ---
 
@@ -2312,7 +1944,12 @@ memoria (Engram) bajo `config/pi-subagents`.
 
 ---
 
-## Apéndice — Guía práctica TDD paso a paso
+## Apéndice
+
+Guía práctica TDD paso a paso
+
+> Las decisiones del documento explican el porqué de cada regla; este apéndice
+es el cómo.
 
 ### Reglas antes de empezar
 
@@ -2330,7 +1967,7 @@ memoria (Engram) bajo `config/pi-subagents`.
 
 ### Ciclo RED → GREEN → TRIANGULATE → REFACTOR
 
-```
+```text
 Pregunta del dominio
         │
         ▼
@@ -2397,7 +2034,7 @@ def calculate_shipping(quantity):
 #### Cuándo triangular (y cuándo no)
 
 | Triangula cuando… | No hace falta triangular cuando… |
-|---|---|
+| --- | --- |
 | El algoritmo es complejo y no ves el patrón de inmediato | Desde el primer test sabes exactamente la fórmula |
 | Quieres blindar una regla de negocio con casos límite | El código mínimo ya es obviamente genérico |
 | Dudas de si tu implementación es realmente general | El comportamiento es trivial (getter, asignación) |
@@ -2440,7 +2077,6 @@ esconder un valor fijo. No hay un programador humano que pueda decidir
 > **Regla:** triangulas código que escribes. No triangulas código que genera
 > Python. Es como testear `1 + 1 == 2` y luego "triangular" con `2 + 2 == 4` —
 > no estás probando tu código, estás probando el intérprete.
-
 > **Caso concreto de este proyecto:** `test_book_created_with_other_valid_data`
 > y `test_user_created_with_other_valid_data` se eliminaron porque triangulaban
 > constructores de `@dataclass`. El decorador genera `__init__` genérico — no hay
@@ -2466,7 +2102,7 @@ def test_book_requires_title():
 El ciclo RED → GREEN se descompone en **varios rojos encadenados**:
 
 | # | Acción | Error obtenido | Qué crear |
-|---|--------|---------------|------------|
+| --- | -------- | --------------- | ------------ |
 | 1 | Ejecutas el test | `NameError: name 'BookError' is not defined` | `class BookError(LibraryApiError): pass` |
 | 2 | Vuelves a ejecutar | `NameError: name 'Book' is not defined` | `@dataclass class Book: ...` mínima |
 | 3 | Vuelves a ejecutar | `BookError no fue lanzada` | Añades validación en `__post_init__` |
@@ -2479,14 +2115,14 @@ Por eso la excepción se crea **antes** que la entidad.
 #### Built-in vs custom
 
 | Usa excepción built-in cuando… | Crea excepción custom cuando… |
-|---|---|
+| --- | --- |
 | El error es genérico, no pertenece a tu dominio | El error es específico de las reglas de tu dominio |
 | `ValueError`, `TypeError` bastan | Necesitas atrapar ESE error concreto más arriba |
 | Estás en un Value Object simple (Email) | Estás en lógica de negocio (`BookAlreadyLoanedError`) |
 
 Jerarquía del proyecto:
 
-```
+```text
 LibraryApiError          ← raíz (se crea antes del primer test de entidad)
 ├── BookError            ← tests negativos de creación de Book
 │   ├── BookNotFoundError      ← búsqueda por ID
@@ -2524,7 +2160,7 @@ de una decisión de diseño. Se crea antes del primer test de entidad.
 > de todo lo demás.
 
 | Orden | Fase | Qué construyes | Tipo de tests | Patrón |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | 1º | VO | Value Objects (Email) | Negativos + Positivos | `pytest.raises` + `assert vo.atributo == valor` |
 | 2º | Creación (−) | **Todas las entidades** — no pueden nacer rotas | Negativos | `pytest.raises(EntidadError)` |
 | 3º | Creación (+) | **Todas las entidades** — creación exitosa | Positivos | `assert entidad.atributo == valor` |
@@ -2543,12 +2179,12 @@ llenarse a la fuerza.
 Estado actual del proyecto:
 
 | Paso | Book | User | Loan |
-|------|------|------|------|
+| ------ | ------ | ------ | ------ |
 | 2. Negativos de creación | Hecho | Hecho | **No aplica** — campos obligatorios son `int` y `date`; Pyright los protege |
 | 3. Positivo de creación | Hecho | Hecho | Hecho |
-| 4. Consulta de estado | `can_be_loaned()` | **No aplica** — solo tiene `username` y `email`, sin estado que consultar | `due_date` |
-| 5. Transiciones (`loan`, `return`) | **Falta** | **No aplica** | **Falta** |
-| 6. Casos límite | **Falta** | **No aplica** | `return_date < loan_date` |
+| 4. Consulta de estado | `can_be_loaned()` | **No aplica** — solo tiene `username` y `email`, sin estado que consultar | `is_active()` |
+| 5. Transiciones | `mark_as_loaned()`, `mark_as_returned()` ✅ | No aplica | `mark_as_returned()` ✅ |
+| 6. Casos límite | `BookAlreadyLoanedError`, `BookNotLoanedError` ✅ | No aplica | `return_date < loan_date` ✅ |
 
 ### Paso 1 — Value Objects (datos pequeños)
 
@@ -2606,7 +2242,7 @@ No todo atributo necesita test negativo. La regla la da el sistema de
 **detección temprana** — quién atrapa el error primero:
 
 | Atributo | Tipo | Valor inválido | ¿Instancia del tipo? | ¿Quién lo atrapa? | ¿Test negativo? |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | `Book.title` | `str` | `""` | ✅ Sí — `""` es `str` | **Runtime** (`__post_init__`) | ✅ Necesario |
 | `User.username` | `str` | `""` | ✅ Sí — `""` es `str` | **Runtime** (`__post_init__`) | ✅ Necesario |
 | `User.email` | `Email` | `"no soy email"` | ❌ No — `str` no es `Email` | **Pyright** (type checker) | ❌ No necesario |
@@ -2638,14 +2274,14 @@ No todo `str` debe bajarse a lowercase. La decisión depende de si existe
 un **estándar externo** que defina la equivalencia:
 
 | Campo | ¿Normalizar? | ¿Por qué? |
-|---|---|---|
+| --- | --- | --- |
 | `Email.value` | ✅ Sí | RFC 5321: `User@Example.com` y `user@example.com` son la misma dirección. No normalizar es incorrecto. |
 | `User.username` | ❌ No | No hay estándar. `JohnDoe` y `johndoe` pueden ser el mismo usuario o dos distintos — es decisión de producto, no técnica. |
 
 La case-sensitivity se resuelve en la **capa correcta**, no en el modelo:
 
 | Capa | ¿Dónde? | ¿Cuándo? |
-|---|---|---|
+| --- | --- | --- |
 | Dominio | `User.username` guarda lo que el usuario escribió | Ahora (Stage 1) |
 | Persistencia | `UNIQUE COLLATE NOCASE` en SQLite | Stage 2 |
 | Búsqueda | `repo.find_by_username()` compara case-insensitive | Stage 1 (Repository) |
@@ -2671,12 +2307,12 @@ def test_book_requires_title():
 **GREEN — código mínimo (tras los 3 rojos):**
 
 ```python
-# exceptions.py
+# models.py — excepciones y entidad
 class BookError(LibraryApiError):
     """Raised for general book-related failures."""
     pass
 
-# models.py
+
 @dataclass
 class Book:
     title: str
@@ -2702,7 +2338,23 @@ def __post_init__(self):
     if not self.title or not self.title.strip():
         raise BookError("Book must have a title")
     if not self.author or not self.author.strip():
-        raise BookError("Book must have an author")
+            raise BookError("Book must have an author")
+```
+
+#### 2.3 — Test negativo: username vacío (User)
+
+```python
+def test_user_requires_username():
+    with pytest.raises(UserError):
+        User(username="", email=Email("test@example.com"))
+```
+
+**GREEN:** añadir validación de username en `User.__post_init__`:
+
+```python
+def __post_init__(self):
+    if not self.username or not self.username.strip():
+        raise UserError("User must have an username")
 ```
 
 ### Paso 3 — Entidad: test positivo (creación exitosa)
@@ -2718,13 +2370,37 @@ def test_book_created_with_valid_data():
 > **Sin triangulación:** el constructor de `@dataclass` es genérico por
 > construcción. No hay código tramposo que cazar.
 
+#### User
+
+```python
+def test_user_created_with_valid_data():
+    user = User("hector", Email("hector@gmail.com"))
+    assert user.username == "hector"
+    assert user.email.value == "hector@gmail.com"
+    assert user.user_id is None
+```
+
+#### Loan
+
+```python
+from datetime import date, timedelta
+
+def test_loan_created_with_valid_data():
+    loan = Loan(book_id=1, user_id=1)
+    assert loan.book_id == 1
+    assert loan.user_id == 1
+    assert loan.loan_date == date.today()
+    assert loan.return_date is None
+    assert loan.loan_id is None
+```
+
 ### Paso 4 — Entidad: comportamiento (métodos)
 
 **Cómo descubrir métodos:** hazte preguntas de sentido común sobre el dominio.
 Para esta fase, solo preguntas que **consultan** estado (no lo cambian):
 
 | Pregunta | Respuesta | Método |
-|----------|-----------|--------|
+| ---------- | ----------- | -------- |
 | ¿Este libro está disponible? | Sí, si no está prestado | `can_be_loaned() → bool` |
 
 > ⚠️ **No hagas tests que solo verifican «se ejecuta sin errores».**
@@ -2754,7 +2430,7 @@ Es **encapsulación**: el campo es implementación interna, el método es
 el contrato público.
 
 | Test | Qué prueba | Nivel |
-|------|-----------|-------|
+| ------ | ----------- | ------- |
 | Test 3 | `assert book.is_available is True` | **Estado interno** — el campo |
 | Test 4 | `assert book.can_be_loaned() is True` | **API pública** — el método |
 
@@ -2793,47 +2469,99 @@ assert book.can_be_loaned() is True   # ✅ respuesta válida
 assert book.can_be_loaned() is False  # ✅ también respuesta válida
 ```
 
-La excepción va en la **acción**, que es `loan()` (Paso 5). Intentar
+La excepción va en la **acción**, que es `mark_as_loaned()` (Paso 5). Intentar
 prestar un libro ya prestado sí es ilegal:
 
 ```python
 # Acción — puede fallar
 with pytest.raises(BookAlreadyLoanedError):   # ✅ excepción aquí
-    book.loan()
+    book.mark_as_loaned()
 ```
 
 | Método | Tipo | ¿Excepción? |
-|--------|------|-------------|
+| -------- | ------ | ------------- |
 | `can_be_loaned()` | Pregunta (query) | Nunca |
-| `loan()` | Acción (command) | `BookAlreadyLoanedError` si ya está prestado |
+| `mark_as_loaned()` | Acción (command) | `BookAlreadyLoanedError` si ya está prestado |
 
 Esto es el principio **Command-Query Separation**: quien pregunta no
 falla; quien actúa, sí puede fallar.
+
+#### Loan — `is_active()` y `due_date`
+
+| Pregunta | Respuesta | Método |
+| ---------- | ----------- | -------- |
+| ¿Este préstamo está activo? | Sí, si `return_date` es `None` | `is_active() → bool` |
+| ¿Cuándo vence? | 30 días después del préstamo | `due_date → date` |
+
+```python
+def test_loan_is_active():
+    loan = Loan(1, 1)
+    assert loan.is_active() is True
+
+def test_loan_due_date_is_loan_date_plus_30_days():
+    loan = Loan(book_id=1, user_id=1)
+    assert loan.due_date == loan.loan_date + timedelta(days=30)
+```
+
+**GREEN:**
+
+```python
+def is_active(self) -> bool:
+    return self.return_date is None
+
+@property
+def due_date(self) -> date:
+    return self.loan_date + timedelta(days=30)
+```
+
+`is_active()` sigue el mismo patrón que `can_be_loaned()`: encapsula el estado
+interno (`return_date`) detrás de un método público. `due_date` es una propiedad
+computada — no almacena el valor, lo calcula a partir de `loan_date`.
 
 ### Paso 5 — Entidad: estados (transiciones)
 
 **Cómo descubrir métodos:** ahora preguntas que **cambian** el estado del objeto:
 
 | Pregunta | Respuesta | Método |
-|----------|-----------|--------|
-| ¿Qué pasa cuando se presta? | Deja de estar disponible | `loan()` → `is_available = False` |
-| ¿Se puede devolver? | Sí, vuelve a estar disponible | `return_book()` → `is_available = True` |
+| ---------- | ----------- | -------- |
+| ¿Qué pasa cuando se presta? | Deja de estar disponible | `mark_as_loaned()` → `is_available = False` |
+| ¿Se puede devolver? | Sí, vuelve a estar disponible | `mark_as_returned()` → `is_available = True` |
 
 ```python
 def test_loaning_book_marks_it_unavailable():
     book = Book("Dune", "Herbert")
-    book.loan()
+    book.mark_as_loaned()
     assert book.is_available is False
 ```
 
 **GREEN:**
 
 ```python
-def loan(self):
+def mark_as_loaned(self):
     self.is_available = False
 ```
 
-💡 **Triangulación:** prueba `loan()` con otro libro para confirmar que no está hardcodeado.
+💡 **Triangulación:** prueba `mark_as_loaned()` con otro libro para confirmar que no está hardcodeado.
+
+#### Loan — `mark_as_returned()`
+
+```python
+def test_loan_is_not_active():
+    loan = Loan(1, 1)
+    loan.mark_as_returned()
+    assert loan.is_active() is False
+```
+
+**GREEN:**
+
+```python
+def mark_as_returned(self, return_date: date | None = None):
+    self.return_date = return_date if return_date is not None else date.today()
+```
+
+El parámetro `return_date` es opcional. Si no se pasa, se usa `date.today()`.
+Esto permite *backdating*: registrar devoluciones que ocurrieron en días
+anteriores. Ver Decisión 5.3 para el razonamiento completo.
 
 ### Paso 6 — Entidad: casos límite (blindaje)
 
@@ -2843,9 +2571,9 @@ def loan(self):
 lugar donde se puede detectar la violación:
 
 | Invariante | Vive en | Por qué |
-|---|---|---|
-| «Un libro prestado no puede prestarse otra vez» | `Book.loan()` | La violación solo es detectable cuando alguien llama a `loan()` |
-| «No se puede devolver un libro disponible» | `Book.return_book()` | Ídem — solo detectable en la transición |
+| --- | --- | --- |
+| «Un libro prestado no puede prestarse otra vez» | `Book.mark_as_loaned()` | La violación solo es detectable cuando alguien llama a `mark_as_loaned()` |
+| «No se puede devolver un libro disponible» | `Book.mark_as_returned()` | Ídem — solo detectable en la transición |
 | «return_date no puede ser < loan_date» | `Loan.__post_init__` | Detectable apenas se construye el objeto — rechazar temprano evita estados inválidos en memoria |
 
 > **Regla:** si la violación se puede detectar en el constructor, protegela ahí.
@@ -2858,7 +2586,7 @@ lugar donde se puede detectar la violación:
 def test_cannot_loan_book_twice():
     book = Book("Dune", "Herbert", is_available=False)
     with pytest.raises(BookAlreadyLoanedError):
-        book.loan()
+        book.mark_as_loaned()
 ```
 
 **RED esperado:** `NameError: name 'BookAlreadyLoanedError' is not defined`.
@@ -2866,13 +2594,13 @@ def test_cannot_loan_book_twice():
 **GREEN:**
 
 ```python
-# exceptions.py
+# models.py — excepción y método
 class BookAlreadyLoanedError(BookError):
     """Raised when attempting to loan a book that is already out."""
     pass
 
-# models.py
-def loan(self):
+
+def mark_as_loaned(self):
     if not self.is_available:
         raise BookAlreadyLoanedError("Book is already loaned")
     self.is_available = False
@@ -2884,7 +2612,7 @@ def loan(self):
 def test_cannot_return_book_that_is_available():
     book = Book("Dune", "Herbert", is_available=True)
     with pytest.raises(BookError):
-        book.return_book()
+        book.mark_as_returned()
 ```
 
 #### 6.3 — `return_date` no puede ser anterior a `loan_date`
@@ -2916,7 +2644,7 @@ Todas las preguntas aplican el mismo principio: **la entidad solo debe conocer s
 estado** (Principio de Responsabilidad Única).
 
 | Pregunta | Si es SÍ… | Por qué |
-|---|---|---|
+| --- | --- | --- |
 | ¿El código consulta una base de datos? | Mal — la entidad no toca la DB | La persistencia es responsabilidad del repositorio. Si la entidad sabe de tablas o queries, no puedes cambiar la DB sin tocar el dominio. |
 | ¿El código sabe de fechas de devolución? | Mal — eso es del préstamo | `Loan` gestiona el ciclo de vida del préstamo. Si `Book` conoce fechas, cada vez que añadas una regla de préstamo tendrás que modificar `Book`. |
 | ¿El código sabe quién lo prestó? | Mal — eso es de la capa de casos de uso | La relación usuario-libro la orquesta un caso de uso (Stage 2). Si `Book` guarda una referencia al usuario, estás forzando a la entidad a conocer todo el modelo de usuarios. |
@@ -2924,7 +2652,7 @@ estado** (Principio de Responsabilidad Única).
 ### Checklist post-entidad
 
 | Verificación | ¿Pasa? |
-|---|---|
+| --- | --- |
 | `pytest src/app/tests/ -v` — todo verde | ☐ |
 | Cada test tiene AAA explícito | ☐ |
 | Cada test negativo usa `pytest.raises` | ☐ |
@@ -2939,19 +2667,19 @@ estado** (Principio de Responsabilidad Única).
 en `__post_init__`.
 
 | Entidad | Atributo | ¿Es VO? | Validación en |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Book | `title` | No (str) | `Book.__post_init__` |
 | Book | `author` | No (str) | `Book.__post_init__` |
 | User | `email` | **Sí (Email)** | Clase `Email` |
 | User | `username` | No (str) | `User.__post_init__` |
 
-- **Loan** relaciona `User` con `Book`. Sus tests vendrán después.
-- El orden completo: `Email (VO) → Book → User → Loan → InMemoryRepository → DbProtocol`
+- **Loan** relaciona `User` con `Book`.
+- El orden completo: `Email (VO) → Book → User → Loan → InMemoryRepository → LibraryRepository`
 
 #### Cuándo usar Value Objects vs strings simples
 
 | Usa VO cuando… | Usa string simple cuando… |
-|---|---|
+| --- | --- |
 | El dato tiene reglas de formato (email, DNI, ISBN) | El dato es libre (título de libro) |
 | El dato se repite en varias entidades | El dato solo existe en una entidad |
 | Quieres que el tipo documente la intención (`Email` vs `str`) | La simplicidad pesa más que el tipado |
@@ -2993,11 +2721,13 @@ En `test_repository.py`, crear el fixture que usaremos en todos los pasos:
 
 ```python
 import pytest
-from app.repository import InMemoryRepository
+
+from app.models import Book
+from app.repository import LibraryRepository, InMemoryRepository
 
 
 @pytest.fixture
-def repo() -> InMemoryRepository:
+def repo() -> LibraryRepository:
     return InMemoryRepository()
 ```
 
@@ -3291,8 +3021,7 @@ excepto el fixture. Todos los parámetros están tipados como
 Para verificarlo:
 
 ```bash
-grep -n 
-InMemoryRepository" src/tests/test_repository.py
+grep -n "InMemoryRepository" src/tests/test_repository.py
 ```
 
 Si el comando solo devuelve la línea del fixture, la swappability está
