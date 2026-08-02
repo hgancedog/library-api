@@ -1,5 +1,7 @@
 {
     "include": ["src"],
     "typeCheckingMode": "strict",
-    "reportMissingTypeStubs": false
+    "reportMissingTypeStubs": false,
+    "venvPath": ".",
+    "venv": ".venv"
 }

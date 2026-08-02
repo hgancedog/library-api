@@ -31,8 +31,16 @@ class UserError(LibraryApiError):
     """Raised for general user-related failures."""
 
 
+class UserNotFoundError(UserError):
+    """Raised when a user ID does not exist in the repository."""
+
+
 class LoanError(LibraryApiError):
     """Raised for general loan-related failures."""
+
+
+class LoanNotFoundError(LoanError):
+    """Raised when a loan ID does not exist in the repository."""
 
 
 _EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
