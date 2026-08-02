@@ -29,7 +29,7 @@ project:
   current_stage: 1
   current_stage_name: Foundations
   current_branch: stage1-tdd-from-scratch # verified: git branch --show-current
-  git_head: ed994b1 # verified: git rev-parse --short HEAD
+  git_head: a89a2bd # verified: git rev-parse --short HEAD
 
   roadmap_file: project_docs/ROADMAP_FINAL_2026.md
   stage_summaries: project_docs/stage_summaries.md
@@ -65,7 +65,7 @@ stack:
     role: Test runner
     plugins: [pytest-cov>=6.0]
     config: pyproject.toml
-    status: active # 21 tests, 0 failures
+    status: active # 30 tests, 0 failures
 
   - tool: pre-commit
     version: "4.5.1"
@@ -92,14 +92,14 @@ structure:
 
   source_files:
     - src/app/__init__.py # empty (0 lines)
-    - src/app/models.py # domain models, exceptions, Email VO, type aliases (109 lines)
-    - src/app/repository.py # LibraryRepository protocol + InMemoryRepository (32 lines)
+    - src/app/models.py # domain models, exceptions, Email VO, type aliases (117 lines)
+    - src/app/repository.py # LibraryRepository protocol + InMemoryRepository (82 lines)
 
   test_files:
     - src/tests/test_book.py # Book creation + availability logic (5 tests)
     - src/tests/test_email.py # Email validation + normalization (2 tests)
     - src/tests/test_loan.py # Loan creation + due_date + validation (3 tests)
-    - src/tests/test_repository.py # InMemoryRepository crud + swap (5 tests)
+    - src/tests/test_repository.py # InMemoryRepository Book/User/Loan CRUD + active loans (13 tests)
     - src/tests/test_user.py # User creation + validation (2 tests)
 
   config_files:
@@ -132,13 +132,17 @@ domain:
         - BookError
           - BookAlreadyLoanedError
           - BookNotLoanedError
+          - BookNotFoundError
         - UserError
+          - UserNotFoundError
         - LoanError
+          - LoanNotFoundError
     file: src/app/models.py
     note: >
-      Hierarchy: 6 classes. BookError has two subclasses
-      (BookAlreadyLoanedError, BookNotLoanedError). UserError and LoanError
-      remain flat. See models.py lines 10-31 for full hierarchy.
+      Hierarchy: 9 classes. BookError has three subclasses
+      (BookAlreadyLoanedError, BookNotLoanedError, BookNotFoundError).
+      UserError and LoanError each have one subclass (UserNotFoundError,
+      LoanNotFoundError). See models.py lines 10-42 for full hierarchy.
 
   value_objects:
     - name: Email
@@ -203,14 +207,16 @@ conventions:
 # CURRENT TEST STATUS
 # ──────────────────────────────────────────────────────────────
 test_status:
-  total_tests: 21
-  passing: 21
-  failing: 0
-  coverage_percent: 100
-  covered_module: src/app/models.py
-  pyright_errors: 0
-  ruff_warnings: 0
-  last_verified: "2026-07-22"
+      total_tests: 30
+      passing: 30
+      failing: 0
+      coverage_percent: 100
+      covered_modules:
+        - src/app/models.py
+        - src/app/repository.py
+      pyright_errors: 0
+      ruff_warnings: 0
+      last_verified: "2026-08-03"
 
 # ──────────────────────────────────────────────────────────────
 # KNOWN TECH DEBT — STAGE 1
