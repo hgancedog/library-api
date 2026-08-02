@@ -1956,6 +1956,12 @@ detectó métodos con firmas obsoletas en documentación markdown y
 referencias cruzadas inconsistentes — cosas que las herramientas
 Python no pueden ver.
 
+La skill `work-unit-commits` se descartó para este proyecto: sus reglas
+de agrupación (tests con código, un comportamiento por commit) chocan
+con el receipt único de gentle_review y añaden fricción innecesaria en
+Stage 1. Qué va en cada commit lo decide el criterio humano, no una
+skill.
+
 ### Decisión
 
 **Mantener el lente, eliminar el resto del ceremonial.**
@@ -2003,7 +2009,6 @@ El flujo se reduce a 3 comandos gentle-ai + commit:
 ---
 
 ---
-
 
 ## Apéndice
 

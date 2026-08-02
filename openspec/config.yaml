@@ -207,16 +207,16 @@ conventions:
 # CURRENT TEST STATUS
 # ──────────────────────────────────────────────────────────────
 test_status:
-      total_tests: 30
-      passing: 30
-      failing: 0
-      coverage_percent: 100
-      covered_modules:
-        - src/app/models.py
-        - src/app/repository.py
-      pyright_errors: 0
-      ruff_warnings: 0
-      last_verified: "2026-08-03"
+  total_tests: 30
+  passing: 30
+  failing: 0
+  coverage_percent: 100
+  covered_modules:
+    - src/app/models.py
+    - src/app/repository.py
+  pyright_errors: 0
+  ruff_warnings: 0
+  last_verified: "2026-08-03"
 
 # ──────────────────────────────────────────────────────────────
 # KNOWN TECH DEBT — STAGE 1
