@@ -131,6 +131,8 @@ Read-only sessions, doc reviews, or conversations do **not** need this check.
 
 6. **Stale SDD artifact**: `openspec/config.yaml` must reflect the current state of the project — not aspirational architecture. If it lists source files that don't exist on disk, describes a stack that isn't installed, or references a different branch than `git branch --show-current`, flag it. A stale config wastes entire SDD phases because agents treat it as ground truth. Verify with: `ls src/app/*.py` vs `structure.source_files`, `python --version` vs `project.python_runtime`, `git branch --show-current` vs `project.current_branch`.
 
+7. **Long session without delegation**: when the session reaches ~20 tool calls or ~2 non-trivial commits without delegating a single task to a subagent, pause and warn. Long sessions cause context dilution — rules in this file, the commit flow, and `config.yaml` integrity checks are progressively forgotten. Suggest: (a) close and reopen the session to reload context fresh, or (b) delegate the next task.
+
 **When I warn you**: stop writing docs/config immediately. Open the task that moves Stage 1 forward. If in doubt, the answer is always: write the next failing test.
 
 ## TDD rule — strict
