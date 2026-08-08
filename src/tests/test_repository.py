@@ -153,3 +153,33 @@ def test_loan_get_active_loans_for_user_excludes_returned(
     active_ids = [loan.loan_id for loan in loans]
     assert active_loan_id in active_ids
     assert returned_loan_id not in active_ids
+
+
+def test_loan_get_active_loan_by_book_returns_none_when_no_loans(
+    repo: LibraryRepository,
+):
+    book_id = repo.add_book(Book(title="1984", author="George Orwell"))
+    assert repo.get_active_loan_by_book(book_id) is None
+
+
+def test_loan_get_active_loan_by_book_returns_none_when_returned(
+    repo: LibraryRepository,
+):
+    book_id = repo.add_book(Book(title="1984", author="George Orwell"))
+    user_id = repo.add_user(
+        User(username="hector", email=Email("hectorbarak@mail.com"))
+    )
+    loan_id = repo.add_loan(Loan(book_id, user_id, date.today()))
+    loan = repo.get_loan(loan_id)
+    loan.mark_as_returned()
+    assert repo.get_active_loan_by_book(book_id) is None
+
+
+def test_loan_get_active_loan_by_book_returns_loan(repo: LibraryRepository):
+    book_id = repo.add_book(Book(title="1984", author="George Orwell"))
+    user_id = repo.add_user(
+        User(username="hector", email=Email("hectorbarak@mail.com"))
+    )
+    loan_id = repo.add_loan(Loan(book_id, user_id, date.today()))
+    loan = repo.get_loan(loan_id)
+    assert repo.get_active_loan_by_book(book_id) is loan

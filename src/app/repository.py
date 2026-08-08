@@ -22,6 +22,7 @@ class LibraryRepository(Protocol):
     def add_loan(self, loan: Loan) -> LoanID: ...
     def get_loan(self, loan_id: LoanID) -> Loan: ...
     def get_active_loans_by_user(self, user_id: UserID) -> list[Loan]: ...
+    def get_active_loan_by_book(self, book_id: BookID) -> Loan | None: ...
 
 
 class InMemoryRepository:
@@ -77,6 +78,12 @@ class InMemoryRepository:
                 loans.append(loan)
 
         return loans
+
+    def get_active_loan_by_book(self, book_id: BookID) -> Loan | None:
+        for loan in self._db_loans.values():
+            if loan.book_id == book_id and loan.is_active():
+                return loan
+        return None
 
 
 _: LibraryRepository = InMemoryRepository()
