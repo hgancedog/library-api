@@ -1473,6 +1473,144 @@ aislamiento total. Ver `project_docs/python-theory.md` para más detalle.
 
 ---
 
+## Sesión 9 — Repositorio: queries de dominio
+
+> Fecha: julio-agosto 2026
+> Objetivo: extender el repositorio con queries que responden preguntas del
+> dominio — no solo CRUD. «¿Qué préstamos activos tiene este usuario?» y
+> «¿Cuál es el préstamo activo de este libro?».
+
+---
+
+### Cómo pensar las queries de dominio
+
+Hasta ahora el repositorio tiene 7 métodos CRUD (add/get para Book, User,
+Loan + get_all_books). Pero una biblioteca necesita responder preguntas:
+
+- ¿Qué libros tiene prestados este usuario ahora mismo?
+- ¿Está prestado este libro? ¿A quién?
+
+Estas queries son parte del contrato del repositorio, no del servicio. El
+repositorio conoce la estructura de datos interna y puede responderlas sin
+N+1 queries. Si estas preguntas las respondiera un servicio, necesitaría
+traer todos los préstamos y filtrar en Python — el repositorio filtraría en
+SQL en Stage 2.
+
+### Decisión 9.1 — `get_active_loans_by_user` devuelve `list[Loan]`, no `list[LoanID]`
+
+**Qué:** la query retorna objetos `Loan` completos, no solo sus IDs.
+
+**Por qué:** devolver solo IDs obliga al caller a hacer N+1 llamadas a
+`get_loan()` para obtener los datos que necesita. Es el repositorio quien
+leak-ea su estructura interna al caller. Devolver los objetos completos es
+consistente con el resto del protocolo (`get_book`, `get_user`, `get_loan`,
+`get_all_books` — todos devuelven objetos de dominio).
+
+**Resultado vacío:** `[]` (lista vacía), no `None`. Un usuario sin préstamos
+no es un error ni un caso especial — es una lista de cero elementos. El caller
+puede iterar sin comprobar `is None`.
+
+**Implementación:**
+
+```python
+def get_active_loans_by_user(self, user_id: UserID) -> list[Loan]:
+    loans: list[Loan] = []
+    for loan in self._db_loans.values():
+        if user_id == loan.user_id and loan.is_active():
+            loans.append(loan)
+    return loans
+```
+
+**Por qué for loop en vez de generator/list comprehension:** la consistencia
+manda. `get_active_loan_by_book` itera y corta con `return` en cuanto encuentra
+el préstamo activo — no puede ser generator. Para que ambas queries se lean
+igual, las dos usan for loop explícito. Un generator aquí ahorraría 3 líneas
+pero crearía asimetría con la query hermana.
+
+### Decisión 9.2 — `get_active_loan_by_book` devuelve `Loan | None`
+
+**Qué:** la query retorna el préstamo activo del libro, o `None` si el libro
+no está prestado.
+
+**Por qué:** un libro solo puede tener un préstamo activo (invariante protegida
+por `BookAlreadyLoanedError`). A diferencia de `get_active_loans_by_user`
+(un usuario puede tener N préstamos), aquí el resultado es 0 o 1. `Loan | None`
+expresa esa cardinalidad en el tipo.
+
+**Por qué no `raise BookNotFoundError`:** el libro existe — lo creaste con
+`add_book`. El `None` significa «no está prestado», no «no existe». Son
+conceptos distintos.
+
+**Implementación:**
+
+```python
+def get_active_loan_by_book(self, book_id: BookID) -> Loan | None:
+    for loan in self._db_loans.values():
+        if loan.book_id == book_id and loan.is_active():
+            return loan
+    return None
+```
+
+### Decisión 9.3 — Tests atómicos: un comportamiento por test
+
+**Qué:** cada query tiene 3 tests independientes, cada uno verificando un
+solo comportamiento.
+
+**`get_active_loans_by_user`:**
+
+| Test | Qué verifica |
+|---|---|
+| `test_loan_get_active_loans_for_user` | Happy path: usuario con 2 préstamos → devuelve ambos |
+| `test_loan_get_active_loans_for_user_returns_empty_when_no_loans` | Usuario sin préstamos → `[]` |
+| `test_loan_get_active_loans_for_user_excludes_returned` | Préstamos devueltos no aparecen |
+
+**`get_active_loan_by_book`:**
+
+| Test | Qué verifica |
+|---|---|
+| `test_loan_get_active_loan_by_book_returns_none_when_no_loans` | Libro sin préstamos → `None` |
+| `test_loan_get_active_loan_by_book_returns_none_when_returned` | Préstamo devuelto → `None` |
+| `test_loan_get_active_loan_by_book_returns_loan` | Happy path: devuelve el `Loan` activo |
+
+**Por qué tests separados:** si un test falla, sabes exactamente qué
+comportamiento se rompió. Un solo test con 3 asserts mezclaría los tres
+escenarios y el mensaje de error no te diría cuál falló. Además, 3 tests
+fuerzan 3 fases RED independientes que triangulan la implementación.
+
+**Por qué `is` en vez de `==` en `returns_loan`:**
+
+```python
+assert repo.get_active_loan_by_book(book_id) is loan
+```
+
+`is` verifica identidad — que el objeto retornado es exactamente el mismo
+que el repositorio guardó. Si el repo devolviera una copia, el test fallaría.
+Es más fuerte que `==` (que compara atributos) y documenta que el repositorio
+devuelve referencias a sus objetos internos.
+
+### Decisión 9.4 — Consistencia con el estilo del proyecto
+
+**Qué:** los tests nuevos siguen todas las convenciones establecidas en
+sesiones anteriores:
+
+- Nombres: `test_<entidad>_<comportamiento>`
+- Constructor de `User` con keyword args: `User(username=..., email=...)`
+- Fixture `repo` tipado contra `LibraryRepository`, no `InMemoryRepository`
+- AAA: Arrange → Act → Assert con separación visual
+
+### Tabla de progreso actualizada
+
+| Paso | Book | User | Loan | Repositorio |
+|---|---|---|---|---|
+| CRUD | ✅ | ✅ | ✅ | ✅ |
+| Queries | — | — | — | `get_active_loans_by_user` ✅, `get_active_loan_by_book` ✅ |
+| Swappability | — | — | — | ✅ (Protocol, 33 tests) |
+
+> **Próxima sesión:** verificar criterios de compleción de Stage 1 —
+> cobertura >90%, docstrings pendientes (TD-006), y cierre formal de la fase.
+
+---
+
 ## Parte-II
 
 Decisiones de infraestructura y herramientas
@@ -3119,3 +3257,170 @@ pytest src/tests/ -v --cov=src/app --cov-report=term-missing
 - Pyright strict: 0 errores.
 - Ruff: 0 warnings.
 - Cobertura ≥ 90%.
+
+---
+
+### Paso 16 — Repositorio: préstamos activos por usuario
+
+**Objetivo:** añadir `get_active_loans_by_user` al protocolo para consultar
+los préstamos activos de un usuario.
+
+#### 16.1 — `test_loan_get_active_loans_for_user` (happy path)
+
+```python
+from datetime import date
+
+
+def test_loan_get_active_loans_for_user(repo: LibraryRepository):
+    book_1_id = repo.add_book(Book(title="1984", author="George Orwell"))
+    book_2_id = repo.add_book(Book(title="Dune", author="Frank Herbert"))
+    user = User("Hector", Email("hector_gan@gmail.com"))
+    user_id = repo.add_user(user)
+
+    loan_1_id = repo.add_loan(Loan(book_1_id, user_id, date.today()))
+    loan_2_id = repo.add_loan(Loan(book_2_id, user_id, date.today()))
+
+    loans: list[Loan] = repo.get_active_loans_by_user(user_id)
+
+    assert len(loans) == 2
+    returned_ids = [loan.loan_id for loan in loans]
+    assert loan_1_id in returned_ids
+    assert loan_2_id in returned_ids
+```
+
+**RED esperado:** `AttributeError` — `get_active_loans_by_user` no existe
+en el Protocol ni en `InMemoryRepository`.
+
+**GREEN:**
+
+```python
+# Protocol — añadir:
+def get_active_loans_by_user(self, user_id: UserID) -> list[Loan]: ...
+
+# InMemoryRepository:
+def get_active_loans_by_user(self, user_id: UserID) -> list[Loan]:
+    loans: list[Loan] = []
+    for loan in self._db_loans.values():
+        if user_id == loan.user_id and loan.is_active():
+            loans.append(loan)
+    return loans
+```
+
+#### 16.2 — `test_loan_get_active_loans_for_user_returns_empty_when_no_loans`
+
+```python
+def test_loan_get_active_loans_for_user_returns_empty_when_no_loans(
+    repo: LibraryRepository,
+):
+    user = User(username="alice", email=Email("alice@example.com"))
+    user_id = repo.add_user(user)
+
+    assert repo.get_active_loans_by_user(user_id) == []
+```
+
+**RED esperado:** no falla — el for loop ya recorre un diccionario vacío y
+devuelve `[]`. El test nace verde, confirmando el comportamiento.
+
+#### 16.3 — `test_loan_get_active_loans_for_user_excludes_returned`
+
+```python
+def test_loan_get_active_loans_for_user_excludes_returned(
+    repo: LibraryRepository,
+):
+    book_1_id = repo.add_book(Book(title="1984", author="George Orwell"))
+    book_2_id = repo.add_book(Book(title="Dune", author="Frank Herbert"))
+    user = User(username="alice", email=Email("alice@example.com"))
+    user_id = repo.add_user(user)
+
+    active_loan_id = repo.add_loan(Loan(book_1_id, user_id, date.today()))
+    returned_loan_id = repo.add_loan(Loan(book_2_id, user_id, date.today()))
+    returned_loan = repo.get_loan(returned_loan_id)
+    returned_loan.mark_as_returned()
+
+    loans = repo.get_active_loans_by_user(user_id)
+
+    active_ids = [loan.loan_id for loan in loans]
+    assert active_loan_id in active_ids
+    assert returned_loan_id not in active_ids
+```
+
+**RED esperado:** no falla — `is_active()` ya discrimina préstamos devueltos.
+El test nace verde, confirmando que el filtro `loan.is_active()` funciona.
+
+**REFACTOR:** verificar consistencia con `get_active_loan_by_book` (Paso 17).
+Ambas queries deben usar el mismo patrón de iteración (for loop explícito).
+
+---
+
+### Paso 17 — Repositorio: préstamo activo por libro
+
+**Objetivo:** añadir `get_active_loan_by_book` al protocolo. A diferencia de
+`get_active_loans_by_user` (lista), esta query devuelve `Loan | None` porque
+un libro solo puede tener un préstamo activo.
+
+#### 17.1 — `test_loan_get_active_loan_by_book_returns_none_when_no_loans`
+
+```python
+def test_loan_get_active_loan_by_book_returns_none_when_no_loans(
+    repo: LibraryRepository,
+):
+    book_id = repo.add_book(Book(title="1984", author="George Orwell"))
+    assert repo.get_active_loan_by_book(book_id) is None
+```
+
+**RED esperado:** `AttributeError` — `get_active_loan_by_book` no existe.
+
+**GREEN — código mínimo:**
+
+```python
+# Protocol — añadir:
+def get_active_loan_by_book(self, book_id: BookID) -> Loan | None: ...
+
+# InMemoryRepository:
+def get_active_loan_by_book(self, book_id: BookID) -> Loan | None:
+    for loan in self._db_loans.values():
+        if loan.book_id == book_id and loan.is_active():
+            return loan
+    return None
+```
+
+#### 17.2 — `test_loan_get_active_loan_by_book_returns_none_when_returned`
+
+```python
+def test_loan_get_active_loan_by_book_returns_none_when_returned(
+    repo: LibraryRepository,
+):
+    book_id = repo.add_book(Book(title="1984", author="George Orwell"))
+    user_id = repo.add_user(
+        User(username="hector", email=Email("hectorbarak@mail.com"))
+    )
+    loan_id = repo.add_loan(Loan(book_id, user_id, date.today()))
+    loan = repo.get_loan(loan_id)
+    loan.mark_as_returned()
+    assert repo.get_active_loan_by_book(book_id) is None
+```
+
+**RED esperado:** no falla — la implementación del paso 17.1 ya cubre este caso
+(el for loop no encuentra ningún préstamo con `is_active() == True`).
+
+#### 17.3 — `test_loan_get_active_loan_by_book_returns_loan`
+
+```python
+def test_loan_get_active_loan_by_book_returns_loan(repo: LibraryRepository):
+    book_id = repo.add_book(Book(title="1984", author="George Orwell"))
+    user_id = repo.add_user(
+        User(username="hector", email=Email("hectorbarak@mail.com"))
+    )
+    loan_id = repo.add_loan(Loan(book_id, user_id, date.today()))
+    loan = repo.get_loan(loan_id)
+    assert repo.get_active_loan_by_book(book_id) is loan
+```
+
+**Nota sobre `is` vs `==`:** `is` verifica identidad (mismo objeto en memoria),
+no igualdad de atributos. Si el repositorio devolviera una copia del `Loan`,
+este test fallaría. Es más estricto que `==` y documenta que el repositorio
+devuelve referencias a sus objetos internos, no copias.
+
+**REFACTOR:** verificar que las dos queries usan el mismo patrón de código
+(for loop explícito) y que los tipos en el Protocol son correctos:
+`list[Loan]` vs `Loan | None`.
