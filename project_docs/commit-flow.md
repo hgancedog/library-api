@@ -2,14 +2,21 @@
 
 > Referenced by `AGENTS.md`. Loaded on demand for commits.
 
-Every commit goes through the gentle-ai review lens. The lens has caught
-cross-file inconsistencies (outdated method signatures in docs, stale
-references) that pyright + ruff can't see because they span Python and
-markdown.
+> **Solo-development mode.** The lens stays because it catches cross-file
+> inconsistencies (Python ↔ markdown) that pyright + ruff can't see. The full
+> ceremonial (separate capture-result, multi-step validation) is designed for
+> peer review and adds unnecessary friction when working alone.
+> See `design-notes/01-tdd-desde-cero.md` §I4 for the full rationale.
+
+Every commit goes through the gentle-ai review lens.
 
 ## Steps
 
 ```bash
+# 0. Stage FIRST — start freezes the workspace, validate checks the index.
+#    If you stage after start, the scope won't match → scope-changed.
+git add <files>
+
 # 1. Freeze scope — selects lens automatically
 gentle-ai review start
 
@@ -21,14 +28,27 @@ gentle-ai review finalize \
   --result <lens>.json \
   --evidence <verify>.json
 
-# 4. Stage files, then validate
-git add <files>
+# 4. Validate (files are already staged from step 0)
 gentle-ai review validate --gate pre-commit
 
 # 5. Commit — Pi blocks direct git commit, use base64 workaround:
 MSG="feat: your message"
 CMD=$(echo "Z2l0IGNvbW1pdCAtbQ==" | base64 -d)
 $CMD "$MSG"
+```
+
+### Splitting into multiple commits
+
+`start` uses workspace projection — it sees ALL modified files, not just staged
+ones. If you have changes for multiple commits, use `git stash` to isolate each
+batch:
+
+```bash
+# Stash everything except what goes in commit 1
+git stash push -- <files-for-commit-2>
+# → workspace now has only commit 1 files → stage → start → finalize → validate → commit
+git stash pop
+# → repeat for commit 2
 ```
 
 ## Lens result template
@@ -61,8 +81,9 @@ $CMD "$MSG"
 
 ## Gotchas
 
-- **Stage before validate.** The review freezes the workspace, but validate
-  compares against the git index. If files aren't staged, validate fails with
-  `scope-changed`.
+- **Stage before start, not before validate.** `start` freezes the workspace
+  (all modified files), `validate` checks the index (staged files). If you stage
+  after start, the scope won't match → `scope-changed`. Stage first.
 - **One review per commit.** The receipt covers a specific set of staged files.
   If you split changes into multiple commits, each needs its own review.
+  Use `git stash` to isolate each batch (see Splitting section above).

@@ -1966,6 +1966,13 @@ skill.
 
 **Mantener el lente, eliminar el resto del ceremonial.**
 
+Esta decisión se adopta como **principio general para todos los proyectos
+individuales**, no solo para library-api. gentle-ai review está diseñado para
+equipos con revisión por pares y compliance. En trabajo unipersonal, el
+ceremonial completo (start → capture-result → finalize → validate) gasta ~15
+tool calls por commit sin aportar valor proporcional. Es intrusivo y frena
+el ritmo de desarrollo.
+
 El flujo se reduce a 3 comandos gentle-ai + commit:
 
 1. `review start` — congela el scope, selecciona el lente
