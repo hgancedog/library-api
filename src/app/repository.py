@@ -19,6 +19,7 @@ class LibraryRepository(Protocol):
     def get_book(self, book_id: BookID) -> Book: ...
     def get_all_books(self) -> dict[BookID, Book]: ...
     def return_book(self, book_id: BookID) -> None: ...
+    def loan_book(self, book_id: BookID, user_id: UserID) -> LoanID: ...
     def add_user(self, user: User) -> UserID: ...
     def get_user(self, user_id: UserID) -> User: ...
     def add_loan(self, loan: Loan) -> LoanID: ...
@@ -55,8 +56,14 @@ class InMemoryRepository:
         loan = self.get_active_loan_by_book(book_id)
         if loan is None:
             raise BookNotLoanedError(f"Book with id {book_id} is not currently loaned")
-        book.is_available = True
+        book.mark_as_returned()
         loan.mark_as_returned()
+
+    def loan_book(self, book_id: BookID, user_id: UserID) -> LoanID:
+        book = self.get_book(book_id)
+        self.get_user(user_id)
+        book.mark_as_loaned()
+        return self.add_loan(Loan(book_id, user_id))
 
     def add_user(self, user: User) -> UserID:
         user.user_id = self._next_user_id

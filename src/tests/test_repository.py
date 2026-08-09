@@ -4,6 +4,7 @@ import pytest
 
 from app.models import (
     Book,
+    BookAlreadyLoanedError,
     BookID,
     BookNotFoundError,
     BookNotLoanedError,
@@ -207,7 +208,7 @@ def test_return_book_marks_book_and_loan_as_returned(
 ):
     book_id = repo.add_book(Book(title="1984", author="George Orwell"))
     user_id = repo.add_user(User(username="hector", email=Email("hector@example.com")))
-    loan_id = repo.add_loan(Loan(book_id, user_id, date.today()))
+    loan_id = repo.loan_book(book_id, user_id)
 
     repo.return_book(book_id)
 
@@ -216,3 +217,50 @@ def test_return_book_marks_book_and_loan_as_returned(
 
     loan = repo.get_loan(loan_id)
     assert not loan.is_active()
+
+
+def test_loan_book_raises_error_when_book_not_found(
+    repo: LibraryRepository,
+):
+    with pytest.raises(BookNotFoundError):
+        repo.loan_book(999999, 1)
+
+
+def test_loan_book_raises_error_when_user_not_found(
+    repo: LibraryRepository,
+):
+    book_id = repo.add_book(Book(title="1984", author="George Orwell"))
+
+    with pytest.raises(UserNotFoundError):
+        repo.loan_book(book_id, 999999)
+
+
+def test_loan_book_raises_error_when_book_already_loaned(
+    repo: LibraryRepository,
+):
+    book_id = repo.add_book(Book(title="1984", author="George Orwell"))
+    user_id = repo.add_user(User(username="alice", email=Email("alice@example.com")))
+    another_user_id = repo.add_user(
+        User(username="bob", email=Email("bob@example.com"))
+    )
+    repo.loan_book(book_id, user_id)
+
+    with pytest.raises(BookAlreadyLoanedError):
+        repo.loan_book(book_id, another_user_id)
+
+
+def test_loan_book_creates_loan_and_marks_book_as_loaned(
+    repo: LibraryRepository,
+):
+    book_id = repo.add_book(Book(title="1984", author="George Orwell"))
+    user_id = repo.add_user(User(username="hector", email=Email("hector@example.com")))
+
+    loan_id = repo.loan_book(book_id, user_id)
+
+    loan = repo.get_loan(loan_id)
+    assert loan.book_id == book_id
+    assert loan.user_id == user_id
+    assert loan.is_active()
+
+    book = repo.get_book(book_id)
+    assert not book.is_available
