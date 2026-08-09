@@ -1611,6 +1611,376 @@ sesiones anteriores:
 
 ---
 
+## Sesión 10 — return_book: diseño, TDD y corrección de bugs
+
+> Fecha: 9 agosto 2026
+> Objetivo: implementar `return_book` en el repositorio siguiendo TDD
+> estricto. La sesión empezó con la discusión del diseño, la escritura de
+> tests (RED), y reveló bugs en una implementación preexistente que no
+> había pasado por TDD.
+
+---
+
+### Cómo pensar el diseño de `return_book`
+
+`return_book(book_id)` es una operación de orquestación, no una simple
+consulta ni un comando de una sola entidad. Debe coordinar dos entidades
+(`Book` y `Loan`) atómicamente:
+
+```text
+return_book(book_id)
+  ├── 1. ¿Existe el libro?      → get_book(book_id)      → BookNotFoundError si no
+  ├── 2. ¿Está prestado?         → get_active_loan_by_book → BookNotLoanedError si no
+  ├── 3. Marcar libro devuelto   → book.is_available = True
+  └── 4. Cerrar el préstamo      → loan.mark_as_returned()
+```
+
+### Decisión 10.1 — `return_book` usa `get_book` y `get_active_loan_by_book`
+
+**Qué:** la implementación delega las comprobaciones de existencia y estado
+en métodos ya existentes del repositorio.
+
+**Por qué:** reinventar las comprobaciones dentro de `return_book` duplica
+código y bifurca la responsabilidad. `get_book` ya sabe lanzar
+`BookNotFoundError` con mensaje descriptivo. `get_active_loan_by_book` ya
+sabe distinguir préstamos activos de devueltos. Usarlos es coherente con
+el principio de responsabilidad única: cada método hace una cosa, y
+`return_book` las orquesta.
+
+### Decisión 10.2 — `get_active_loan_by_book` devuelve `None`, no lanza error
+
+**Qué:** se mantiene la semántica actual: `None` significa «no hay préstamo
+activo» y es un estado perfectamente válido del dominio.
+
+**Por qué:** la pregunta «¿está prestado este libro?» tiene dos respuestas
+válidas: sí (devuelve el `Loan`) o no (devuelve `None`). No tener préstamo
+activo no es un error del sistema — es un estado normal. Distinto es el
+contexto de `return_book`, donde intentar devolver un libro no prestado
+**sí** es un error. Ahí `return_book` traduce el `None` en
+`BookNotLoanedError`.
+
+Esta distinción sigue el patrón del resto del repositorio:
+
+| Método | Pregunta | Respuesta sin datos | Tipo |
+|---|---|---|---|
+| `get_book` | "¿Existe este ID?" | ❌ Error | `Book` o `BookNotFoundError` |
+| `get_active_loan_by_book` | "¿Está prestado?" | ✅ `None` | `Loan \| None` |
+| `get_active_loans_by_user` | "¿Qué tiene prestado?" | ✅ `[]` | `list[Loan]` |
+
+### Bugs detectados en la implementación preexistente
+
+Durante la sesión se descubrió que `return_book` ya existía en `repository.py`,
+escrito sin TDD en una sesión anterior. El análisis reveló 6 problemas:
+
+#### Bug 1 — `BookNotFoundError()` sin mensaje
+
+```python
+# ❌ Antes
+if book_id not in self._db_books:
+    raise BookNotFoundError()
+```
+
+Todas las demás excepciones del repositorio incluyen mensaje descriptivo
+(`f"Book with id {book_id} not found"`). La inconsistencia rompe el
+principio de menor sorpresa.
+
+**Corrección:** delegar en `get_book()` que ya tiene el mensaje.
+
+#### Bug 2 — Bucle manual redundante
+
+```python
+# ❌ Antes
+for loan in self._db_loans.values():
+    if loan.book_id == book_id:
+        ...
+```
+
+`get_active_loan_by_book` ya implementa exactamente esta búsqueda. El
+bucle duplica su lógica, y si la query cambia (ej. se optimiza con un
+índice en Stage 2), `return_book` quedaría desincronizado.
+
+**Corrección:** usar `self.get_active_loan_by_book(book_id)`.
+
+#### Bug 3 — `BookNotLoanedError` ausente
+
+```python
+# ❌ Antes: si el libro no tiene préstamo activo, el método no hace nada
+for loan in self._db_loans.values():
+    if loan.book_id == book_id:
+        ...
+# Si ningún loan coincide, el bucle termina y la función retorna en silencio
+```
+
+Este era el bug más grave. Si un libro existía pero no estaba prestado,
+`return_book` retornaba sin hacer nada, sin lanzar error y sin informar
+al caller. El código callaba un error de dominio.
+
+**Corrección:**
+
+```python
+loan = self.get_active_loan_by_book(book_id)
+if loan is None:
+    raise BookNotLoanedError(f"Book with id {book_id} is not currently loaned")
+```
+
+#### Bug 4 — `book.mark_as_returned()` dentro del bucle + `add_loan` no marca el libro
+
+```python
+# ❌ Antes
+for loan in self._db_loans.values():
+    if loan.book_id == book_id:
+        loan.mark_as_returned()
+        book = self.get_book(book_id)
+        book.mark_as_returned()
+```
+
+Tres problemas en 4 líneas:
+
+1. **`book.mark_as_returned()` dentro del bucle.** Si por algún motivo
+   hubiera múltiples loans con el mismo `book_id`, se llamaría una vez
+   por iteración. La segunda llamada lanzaría `BookNotLoanedError` porque
+   el libro ya fue marcado.
+
+2. **`get_book()` redundante.** Ya sabíamos que el libro existe por el
+   guard inicial. Volver a pedirlo es una consulta innecesaria.
+
+3. **El guard de `mark_as_returned()` rechaza el happy path.**
+   `Book.mark_as_returned()` tiene su propio guard:
+   `if self.is_available: raise BookNotLoanedError`. Pero `add_loan`
+   nunca llama a `book.mark_as_loaned()`, así que `is_available` sigue
+   en `True` tras crear el préstamo. El guard ve el libro disponible y
+   lanza error — aunque realmente SÍ está prestado.
+
+   La causa raíz no es que el guard sea redundante: es que **falta una
+   operación simétrica a `return_book`.** `add_loan` es CRUD — guarda un
+   `Loan` sin tocar el `Book`. Nadie llama a `mark_as_loaned()`. El libro
+   y su préstamo están desincronizados.
+
+**Corrección temporal:** asignar `book.is_available = True` directamente
+para esquivar el guard roto. Esta decisión se revisa en la Sesión 11
+cuando se implementa `loan_book`, la operación que faltaba.
+
+#### Bug 5 — Sin anotación de retorno en el Protocol ni en la implementación
+
+```python
+# ❌ Antes
+def return_book(self, book_id: BookID): ...
+def return_book(self, book_id: BookID):
+```
+
+**Corrección:** `-> None` explícito en ambas.
+
+#### Bug 6 — `get_active_loan_by_book` no usaba `BookNotLoanedError`
+
+**Qué:** `BookNotLoanedError` ya existía en `models.py` (lo usa
+`Book.mark_as_returned()`) pero el repositorio no lo importaba.
+
+**Corrección:** añadir `BookNotLoanedError` a los imports del repositorio.
+
+### La versión corregida
+
+```python
+def return_book(self, book_id: BookID) -> None:
+    book = self.get_book(book_id)
+    loan = self.get_active_loan_by_book(book_id)
+    if loan is None:
+        raise BookNotLoanedError(
+            f"Book with id {book_id} is not currently loaned"
+        )
+    book.is_available = True
+    loan.mark_as_returned()
+```
+
+### Decisión 10.3 — Workaround temporal: `book.is_available = True`
+
+**Qué:** `return_book` asigna directamente el campo en vez de delegar en
+`book.mark_as_returned()`.
+
+**Por qué:** `add_loan` (CRUD) nunca llama a `book.mark_as_loaned()`, así
+que `is_available` sigue en `True` tras crear el préstamo. El guard de
+`mark_as_returned()` — `if self.is_available: raise BookNotLoanedError` —
+rechaza el happy path aunque realmente el libro SÍ está prestado.
+
+La asignación directa no es un principio de diseño: es un **workaround**
+para esquivar un guard que opera con información incompleta. El libro no
+sabe que tiene un préstamo activo porque nadie se lo dijo. La solución
+definitiva es implementar `loan_book`, la operación simétrica que marca
+el libro como prestado al crear el préstamo (ver Sesión 11).
+
+> **Corrección posterior (Sesión 11):** `loan_book` se implementó con
+> TDD. `return_book` ahora usa `book.mark_as_returned()` correctamente
+> porque `loan_book` ya llamó a `mark_as_loaned()`.
+
+### TDD aplicado: 3 tests
+
+Siguiendo el orden de trabajo del apéndice, se escribieron 2 tests de
+error + 1 test de happy path:
+
+| Test | Qué verifica |
+|---|---|
+| `test_return_book_raises_error_when_book_not_found` | ID inexistente → `BookNotFoundError` |
+| `test_return_book_raises_error_when_book_not_loaned` | Libro disponible → `BookNotLoanedError` |
+| `test_return_book_marks_book_and_loan_as_returned` | Happy path: `book.is_available = True` y `not loan.is_active()` |
+
+### Decisión 10.4 — No añadir `test_return_book_raises_error_when_book_already_returned`
+
+**Qué:** no se crea un test separado para el caso "libro que tuvo un
+préstamo pero ya fue devuelto".
+
+**Por qué:** `return_book` distingue dos casos: (A) libro nunca prestado
+(`is_available=True`, 0 loans), (B) libro ya devuelto (`is_available=True`,
+1+ loans inactivos). En ambos, `get_active_loan_by_book` devuelve `None`
+y se lanza `BookNotLoanedError`. El camino de código es idéntico. El caso
+A ya cubre esta rama. Añadir el caso B sería un test redundante que no
+ejercita código nuevo.
+
+### Tabla de progreso actualizada
+
+| Paso | Book | User | Loan | Repositorio |
+|---|---|---|---|---|
+| CRUD | ✅ | ✅ | ✅ | ✅ |
+| Queries | — | — | — | `get_active_loans_by_user` ✅, `get_active_loan_by_book` ✅ |
+| Orquestación | — | — | — | `return_book` ✅, `loan_book` 🔲 (pendiente) |
+| Swappability | — | — | — | ✅ (Protocol, 36 tests) |
+
+> **Próxima sesión:** implementar `loan_book` (la operación simétrica a
+> `return_book`) y eliminar el workaround `book.is_available = True`.
+
+---
+
+## Sesión 11 — loan_book: la operación que faltaba
+
+> Fecha: 9 agosto 2026
+> Objetivo: implementar `loan_book` como operación simétrica a
+> `return_book`, restaurar `book.mark_as_returned()` y eliminar el
+> workaround `book.is_available = True`.
+
+---
+
+### El descubrimiento
+
+En la Sesión 10 se detectó que `return_book` usaba `book.is_available = True`
+como workaround porque `book.mark_as_returned()` rechazaba el happy path. La
+causa raíz era simple: **`add_loan` nunca llamaba a `book.mark_as_loaned()`.**
+
+```text
+add_loan(loan)     → guarda Loan, NO toca Book   ← CRUD
+return_book(id)    → actualiza Book + Loan        ← dominio
+```
+
+Faltaba `loan_book`, la operación simétrica. Sin ella, el libro no sabía que
+tenía un préstamo activo.
+
+### Cómo pensar el diseño
+
+`loan_book` es a `return_book` lo que `mark_as_loaned` es a `mark_as_returned`:
+
+| Operación | Book | Loan |
+|---|---|---|
+| `loan_book(book_id, user_id)` | `mark_as_loaned()` → `is_available = False` | `add_loan()` → nuevo `Loan` activo |
+| `return_book(book_id)` | `mark_as_returned()` → `is_available = True` | `mark_as_returned()` → `return_date = today` |
+
+### Decisión 11.1 — `loan_book` recibe dos IDs, devuelve `LoanID`
+
+**Qué:** la firma es `loan_book(book_id: BookID, user_id: UserID) -> LoanID`.
+
+**Por qué:** es simétrica a `return_book(book_id) -> None`. La diferencia en
+el retorno responde a la naturaleza de cada operación:
+
+- `return_book` no necesita devolver nada — el caller ya conoce el `book_id`.
+- `loan_book` crea un `Loan` nuevo y el caller necesita el `loan_id` para
+  cualquier operación posterior (consultar estado, devolver, etc.).
+
+### Decisión 11.2 — `return_book` ahora usa `book.mark_as_returned()`
+
+**Qué:** se elimina el workaround `book.is_available = True` y se restaura
+la delegación en el método de la entidad.
+
+**Por qué:** con `loan_book` implementado, el libro ya es marcado como
+prestado (`is_available = False`) al crear el préstamo. El guard de
+`mark_as_returned()` ahora funciona correctamente:
+
+```text
+loan_book   → book.mark_as_loaned()   ← is_available = False
+            → add_loan()
+
+return_book → book.mark_as_returned() ← guard: is_available=False → OK
+            → loan.mark_as_returned()
+```
+
+El workaround de la Sesión 10 era un síntoma, no un principio. La causa
+real era la operación faltante.
+
+### TDD aplicado: 4 tests
+
+| Test | Qué verifica |
+|---|---|
+| `test_loan_book_raises_error_when_book_not_found` | ID inexistente → `BookNotFoundError` |
+| `test_loan_book_raises_error_when_user_not_found` | Usuario inexistente → `UserNotFoundError` |
+| `test_loan_book_raises_error_when_book_already_loaned` | Libro ya prestado → `BookAlreadyLoanedError` |
+| `test_loan_book_creates_loan_and_marks_book_as_loaned` | Happy path: crea `Loan` + `book.is_available = False` |
+
+### La implementación final
+
+```python
+# Protocol
+def loan_book(self, book_id: BookID, user_id: UserID) -> LoanID: ...
+
+# InMemoryRepository
+def loan_book(self, book_id: BookID, user_id: UserID) -> LoanID:
+    book = self.get_book(book_id)
+    self.get_user(user_id)
+    book.mark_as_loaned()
+    return self.add_loan(Loan(book_id, user_id))
+```
+
+```python
+# return_book — workaround eliminado
+def return_book(self, book_id: BookID) -> None:
+    book = self.get_book(book_id)
+    loan = self.get_active_loan_by_book(book_id)
+    if loan is None:
+        raise BookNotLoanedError(
+            f"Book with id {book_id} is not currently loaned"
+        )
+    book.mark_as_returned()
+    loan.mark_as_returned()
+```
+
+### Decisión 11.3 — El test de `return_book` ahora usa `loan_book`
+
+**Qué:** el test happy path de `return_book` cambió de `add_loan` a
+`loan_book` para reflejar el uso real de la API:
+
+```python
+# Antes (workaround)
+loan_id = repo.add_loan(Loan(book_id, user_id, date.today()))
+repo.return_book(book_id)
+
+# Ahora (diseño corregido)
+loan_id = repo.loan_book(book_id, user_id)
+repo.return_book(book_id)
+```
+
+**Por qué:** `loan_book` es el punto de entrada correcto para crear un
+préstamo — valida existencia de libro y usuario, marca el libro, crea el
+`Loan`. El test ahora prueba el flujo real, no una combinación de CRUD
+que deja el sistema en un estado inconsistente.
+
+### Tabla de progreso actualizada
+
+| Paso | Book | User | Loan | Repositorio |
+|---|---|---|---|---|
+| CRUD | ✅ | ✅ | ✅ | ✅ |
+| Queries | — | — | — | `get_active_loans_by_user` ✅, `get_active_loan_by_book` ✅ |
+| Orquestación | — | — | — | `return_book` ✅, `loan_book` ✅ (7 tests, 40 total) |
+| Swappability | — | — | — | ✅ (Protocol, 40 tests) |
+
+> **Próxima sesión:** Stage 1 completion criteria — verificar cobertura
+> >90%, docstrings pendientes (TD-006), y cierre formal de la fase.
+
+---
+
 ## Parte-II
 
 Decisiones de infraestructura y herramientas
@@ -3424,3 +3794,307 @@ devuelve referencias a sus objetos internos, no copias.
 **REFACTOR:** verificar que las dos queries usan el mismo patrón de código
 (for loop explícito) y que los tipos en el Protocol son correctos:
 `list[Loan]` vs `Loan | None`.
+
+---
+
+### Paso 18 — Repositorio: devolver libro (`return_book`)
+
+**Objetivo:** añadir `return_book` al protocolo como operación de
+orquestación que coordina `Book` y `Loan` atómicamente.
+
+> **A diferencia de los pasos 8-17, este método no es CRUD ni query.**
+> Es una operación de dominio que cambia el estado de dos entidades a la
+> vez. La coordinación la hace el repositorio porque conoce la estructura
+> interna de datos y puede garantizar atomicidad.
+
+#### 18.1 — Test negativo: libro no encontrado
+
+```python
+from app.models import BookNotFoundError
+
+
+def test_return_book_raises_error_when_book_not_found(
+    repo: LibraryRepository,
+):
+    with pytest.raises(BookNotFoundError):
+        repo.return_book(999999)
+```
+
+**RED esperado:** `AttributeError` — `return_book` no existe en el
+Protocol ni en `InMemoryRepository`.
+
+**GREEN — código mínimo:**
+
+```python
+# Protocol — añadir:
+def return_book(self, book_id: BookID) -> None: ...
+
+# InMemoryRepository:
+def return_book(self, book_id: BookID) -> None:
+    book = self.get_book(book_id)  # ← BookNotFoundError si no existe
+```
+
+> **Nota:** el código mínimo para GREEN es solo la comprobación de
+> existencia. El resto del método se construye en los pasos siguientes.
+
+#### 18.2 — Test negativo: libro no prestado
+
+```python
+from app.models import BookNotLoanedError
+
+
+def test_return_book_raises_error_when_book_not_loaned(
+    repo: LibraryRepository,
+):
+    book_id = repo.add_book(Book(title="1984", author="George Orwell"))
+
+    with pytest.raises(BookNotLoanedError):
+        repo.return_book(book_id)
+```
+
+**RED esperado:** el test falla porque `return_book` aún no comprueba si
+el libro tiene un préstamo activo.
+
+**GREEN:**
+
+```python
+def return_book(self, book_id: BookID) -> None:
+    book = self.get_book(book_id)
+    loan = self.get_active_loan_by_book(book_id)
+    if loan is None:
+        raise BookNotLoanedError(
+            f"Book with id {book_id} is not currently loaned"
+        )
+```
+
+> **Por qué `get_active_loan_by_book` y no un bucle manual:** el método ya
+> existe en el repositorio y responde exactamente esta pregunta. Duplicar
+> su lógica crearía dos fuentes de verdad sobre «¿está prestado este
+> libro?».
+
+#### 18.3 — Test positivo: happy path
+
+```python
+def test_return_book_marks_book_and_loan_as_returned(
+    repo: LibraryRepository,
+):
+    book_id = repo.add_book(Book(title="1984", author="George Orwell"))
+    user_id = repo.add_user(
+        User(username="hector", email=Email("hector@example.com"))
+    )
+    loan_id = repo.loan_book(book_id, user_id)
+
+    repo.return_book(book_id)
+
+    book = repo.get_book(book_id)
+    assert book.is_available
+
+    loan = repo.get_loan(loan_id)
+    assert not loan.is_active()
+```
+
+**RED esperado:** el test falla porque `return_book` no muta el estado
+del libro ni del préstamo.
+
+**GREEN:**
+
+```python
+def return_book(self, book_id: BookID) -> None:
+    book = self.get_book(book_id)
+    loan = self.get_active_loan_by_book(book_id)
+    if loan is None:
+        raise BookNotLoanedError(
+            f"Book with id {book_id} is not currently loaned"
+        )
+    book.mark_as_returned()
+    loan.mark_as_returned()
+```
+
+> **Nota sobre `loan_book` en el test:** el test usa `loan_book` en vez
+> de `add_loan` porque `loan_book` es el punto de entrada correcto para
+> crear un préstamo: valida existencia de libro y usuario, marca el libro
+> como prestado y crea el `Loan`. Usar `add_loan` directamente deja el
+> libro desincronizado (`is_available` sigue en `True`).
+>
+> `loan_book` se implementa en el Paso 19.
+
+**REFACTOR:** verificar que:
+
+- `return_book` reutiliza `get_book` y `get_active_loan_by_book` en vez
+  de reinventar las comprobaciones.
+- Los imports incluyen `BookNotLoanedError`.
+- La firma tiene `-> None` explícito tanto en el Protocol como en la
+  implementación.
+- Los 3 tests usan `assert` sin `is True`/`is False` (convención del
+  proyecto: `assert book.is_available`, `assert not loan.is_active()`).
+- Ningún test referencia `InMemoryRepository` directamente — todos
+  reciben `repo: LibraryRepository`.
+
+### Checklist post-return_book
+
+| Verificación | ¿Pasa? |
+| --- | --- |
+| `pytest src/tests/ -v -k "return_book"` — 3 tests verdes | ☐ |
+| `pytest src/tests/ -v` — todos los tests existentes siguen verdes | ☐ |
+| `ruff check src/` — 0 warnings | ☐ |
+| `pyright` — 0 errors | ☐ |
+| `grep -n InMemoryRepository src/tests/test_repository.py` — solo el fixture | ☐ |
+| `return_book` en el Protocol tiene `-> None` | ☐ |
+| `BookNotLoanedError` está en los imports de `repository.py` | ☐ |
+
+---
+
+### Paso 19 — Repositorio: crear préstamo con orquestación (`loan_book`)
+
+**Objetivo:** añadir `loan_book` al protocolo como operación simétrica a
+`return_book`. A diferencia de `add_loan` (CRUD), `loan_book` coordina
+`Book` + `Loan` atómicamente: valida existencia de libro y usuario, marca
+el libro como prestado y crea el préstamo.
+
+> **Por qué existe este paso:** `add_loan` guarda un `Loan` pero no toca
+> el `Book`. El libro y su préstamo quedan desincronizados. `loan_book`
+> cierra esa brecha.
+
+#### 19.1 — Test negativo: libro no encontrado
+
+```python
+def test_loan_book_raises_error_when_book_not_found(
+    repo: LibraryRepository,
+):
+    with pytest.raises(BookNotFoundError):
+        repo.loan_book(999999, 1)
+```
+
+**RED esperado:** `AttributeError` — `loan_book` no existe en el
+Protocol ni en `InMemoryRepository`.
+
+**GREEN — código mínimo:**
+
+```python
+# Protocol — añadir:
+def loan_book(self, book_id: BookID, user_id: UserID) -> LoanID: ...
+
+# InMemoryRepository:
+def loan_book(self, book_id: BookID, user_id: UserID) -> LoanID:
+    book = self.get_book(book_id)  # ← BookNotFoundError si no existe
+```
+
+#### 19.2 — Test negativo: usuario no encontrado
+
+```python
+from app.models import UserNotFoundError
+
+
+def test_loan_book_raises_error_when_user_not_found(
+    repo: LibraryRepository,
+):
+    book_id = repo.add_book(Book(title="1984", author="George Orwell"))
+
+    with pytest.raises(UserNotFoundError):
+        repo.loan_book(book_id, 999999)
+```
+
+**RED esperado:** el test falla porque `loan_book` aún no comprueba la
+existencia del usuario.
+
+**GREEN:**
+
+```python
+def loan_book(self, book_id: BookID, user_id: UserID) -> LoanID:
+    book = self.get_book(book_id)
+    self.get_user(user_id)  # ← UserNotFoundError si no existe
+```
+
+#### 19.3 — Test negativo: libro ya prestado
+
+```python
+from app.models import BookAlreadyLoanedError
+
+
+def test_loan_book_raises_error_when_book_already_loaned(
+    repo: LibraryRepository,
+):
+    book_id = repo.add_book(Book(title="1984", author="George Orwell"))
+    user_id = repo.add_user(
+        User(username="alice", email=Email("alice@example.com"))
+    )
+    another_user_id = repo.add_user(
+        User(username="bob", email=Email("bob@example.com"))
+    )
+    repo.loan_book(book_id, user_id)
+
+    with pytest.raises(BookAlreadyLoanedError):
+        repo.loan_book(book_id, another_user_id)
+```
+
+**RED esperado:** el test falla porque `loan_book` no marca el libro
+como prestado.
+
+**GREEN:**
+
+```python
+def loan_book(self, book_id: BookID, user_id: UserID) -> LoanID:
+    book = self.get_book(book_id)
+    self.get_user(user_id)
+    book.mark_as_loaned()  # ← BookAlreadyLoanedError si ya está prestado
+```
+
+#### 19.4 — Test positivo: happy path
+
+```python
+def test_loan_book_creates_loan_and_marks_book_as_loaned(
+    repo: LibraryRepository,
+):
+    book_id = repo.add_book(Book(title="1984", author="George Orwell"))
+    user_id = repo.add_user(
+        User(username="hector", email=Email("hector@example.com"))
+    )
+
+    loan_id = repo.loan_book(book_id, user_id)
+
+    loan = repo.get_loan(loan_id)
+    assert loan.book_id == book_id
+    assert loan.user_id == user_id
+    assert loan.is_active()
+
+    book = repo.get_book(book_id)
+    assert not book.is_available
+```
+
+**RED esperado:** el test falla porque `loan_book` no crea el préstamo.
+
+**GREEN:**
+
+```python
+def loan_book(self, book_id: BookID, user_id: UserID) -> LoanID:
+    book = self.get_book(book_id)
+    self.get_user(user_id)
+    book.mark_as_loaned()
+    return self.add_loan(Loan(book_id, user_id))
+```
+
+> **Por qué `is_active()` es `True` en el assert:** el préstamo recién
+> creado no tiene `return_date` → `is_active()` devuelve `True`. Es el
+> estado normal de un préstamo nuevo.
+
+**REFACTOR:** verificar que:
+
+- `loan_book` reutiliza `get_book`, `get_user`, `mark_as_loaned` y
+  `add_loan` — cada pieza hace una cosa.
+- `return_book` ahora usa `book.mark_as_returned()` (el workaround
+  `book.is_available = True` ya no es necesario porque `loan_book`
+  marcó `is_available = False`).
+- El test de `return_book` usa `loan_book` para crear el préstamo.
+- Los 4 tests reciben `repo: LibraryRepository`.
+
+### Checklist post-loan_book
+
+| Verificación | ¿Pasa? |
+| --- | --- |
+| `pytest src/tests/ -v -k "loan_book"` — 4 tests verdes | ☐ |
+| `pytest src/tests/ -v` — 40 tests verdes | ☐ |
+| `ruff check src/` — 0 warnings | ☐ |
+| `pyright` — 0 errors | ☐ |
+| `loan_book` en el Protocol tiene `(book_id: BookID, user_id: UserID) -> LoanID` | ☐ |
+| `return_book` usa `book.mark_as_returned()`, no asignación directa | ☐ |
+| El test de `return_book` usa `loan_book` para crear el préstamo | ☐ |

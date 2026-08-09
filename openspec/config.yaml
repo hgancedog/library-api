@@ -1,6 +1,6 @@
 # openspec/config.yaml
 # SDD / OpenSpec project configuration for library-api
-# Updated: 2026-07-10 · Stage 1 · Foundations
+# Updated: 2026-08-10 · Stage 1 · Foundations
 #
 # RULES FOR THIS FILE:
 #   1. Describe ONLY what exists on disk right now — no aspirational content.
@@ -29,7 +29,7 @@ project:
   current_stage: 1
   current_stage_name: Foundations
   current_branch: stage1-tdd-from-scratch # verified: git branch --show-current
-  git_head: d83cdc6 # verified: git rev-parse --short HEAD
+  git_head: cd5be33 # verified: git rev-parse --short HEAD
 
   roadmap_file: project_docs/ROADMAP_FINAL_2026.md
   stage_summaries: project_docs/stage_summaries.md
@@ -65,7 +65,7 @@ stack:
     role: Test runner
     plugins: [pytest-cov>=6.0]
     config: pyproject.toml
-    status: active # 33 tests, 0 failures
+    status: active # 40 tests, 0 failures
 
   - tool: pre-commit
     version: "4.5.1"
@@ -92,14 +92,14 @@ structure:
 
   source_files:
     - src/app/__init__.py # empty (0 lines)
-    - src/app/models.py # domain models, exceptions, Email VO, type aliases (117 lines)
-    - src/app/repository.py # LibraryRepository protocol + InMemoryRepository (89 lines)
+    - src/app/models.py # domain models, exceptions, Email VO, type aliases, docstrings (155 lines)
+    - src/app/repository.py # LibraryRepository protocol + InMemoryRepository, docstrings (189 lines)
 
   test_files:
     - src/tests/test_book.py # Book creation + availability logic (5 tests)
     - src/tests/test_email.py # Email validation + normalization (2 tests)
     - src/tests/test_loan.py # Loan creation + due_date + validation (3 tests)
-    - src/tests/test_repository.py # InMemoryRepository Book/User/Loan CRUD + active loans (16 tests)
+    - src/tests/test_repository.py # InMemoryRepository Book/User/Loan CRUD + active loans + return_book + loan_book (26 tests)
     - src/tests/test_user.py # User creation + validation (2 tests)
 
   config_files:
@@ -207,8 +207,8 @@ conventions:
 # CURRENT TEST STATUS
 # ──────────────────────────────────────────────────────────────
 test_status:
-  total_tests: 33
-  passing: 33
+  total_tests: 40
+  passing: 40
   failing: 0
   coverage_percent: 100
   covered_modules:
@@ -216,7 +216,7 @@ test_status:
     - src/app/repository.py
   pyright_errors: 0
   ruff_warnings: 0
-  last_verified: "2026-08-08"
+  last_verified: "2026-08-10"
 
 # ──────────────────────────────────────────────────────────────
 # KNOWN TECH DEBT — STAGE 1
@@ -249,14 +249,15 @@ tech_debt:
     stage_to_fix: 2
 
   - id: TD-006
-    file: src/app/models.py
+    file: src/app/models.py, src/app/repository.py
     description: >
-      Docstrings missing on entitites (Book, User, Loan, Email), public methods
-      (can_be_loaned, mark_as_loaned), the due_date property, and type aliases
-      (BookID, UserID, LoanID). Exceptions already have docstrings. Add before
-      Stage 1 merge to main — required for AI-auditable code and portfolio quality.
+      ✅ DONE (2026-08-10). Added docstrings to all entities (Email, Book, User,
+      Loan), public methods (can_be_loaned, mark_as_loaned, mark_as_returned,
+      is_active, due_date), protocol methods, and InMemoryRepository methods.
+      All 39 D-rule violations in source code resolved.
     severity: minor
     stage_to_fix: 1
+    status: resolved
 
 # ──────────────────────────────────────────────────────────────
 # SDD CONFIGURATION
