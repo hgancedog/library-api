@@ -7,7 +7,7 @@
 - **Name**: library-api — Library Management System
 - **Author**: Hector Gancedo Grade
 - **Language**: Python 3.14
-- **Current stage**: Stage 1 · Foundations (`stage1-tdd-from-scratch`)
+- **Current stage**: Stage 1 · Foundations (`stage1-inmemory`)
 - **Goal**: In-memory API, fully typed, tested, and lint-clean — no database yet
 - **Full roadmap**: `project_docs/ROADMAP_FINAL_2026.md`
 - **SDD config**: `openspec/config.yaml`
@@ -152,8 +152,8 @@ See `project_docs/commit-flow.md` for the step-by-step procedure.
 
 ## Known tech debt
 
-- **Branch rename post-Stage 1**: after completing Stage 1, delete `stage1-inmemory` (local + remote, 17 stale commits) and rename `stage1-tdd-from-scratch` → `stage1-inmemory`. Update references in `AGENTS.md`, `openspec/config.yaml`, `stage_summaries.md`, and `ROADMAP_FINAL_2026.md`.
-- **Pending docstrings**: `models.py` has docstrings on exceptions but not on entities (`Book`, `User`, `Loan`, `Email`), public methods (`can_be_loaned`, `mark_as_loaned`, `due_date`), or type aliases (`BookID`, `UserID`, `LoanID`). Add them when Stage 1 is done so the code is AI-auditable and portfolio-ready.
+- **Branch rename post-Stage 1**: ✅ DONE (2026-08-10). Deleted stale `stage1-inmemory`, renamed `stage1-tdd-from-scratch` → `stage1-inmemory`.
+- **Pending docstrings**: ✅ DONE (2026-08-10). All entities, public methods, properties, protocol, and implementation documented.
 
 ## Context loading policy
 

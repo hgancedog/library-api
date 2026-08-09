@@ -28,7 +28,7 @@ project:
   python_runtime: "3.14.4" # verified: python --version in .venv
   current_stage: 1
   current_stage_name: Foundations
-  current_branch: stage1-tdd-from-scratch # verified: git branch --show-current
+  current_branch: stage1-inmemory # verified: git branch --show-current
   git_head: cd5be33 # last verified commit at which config.yaml was checked
 
   roadmap_file: project_docs/ROADMAP_FINAL_2026.md

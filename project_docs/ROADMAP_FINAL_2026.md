@@ -27,7 +27,7 @@ No aprendas a usar IA para escribir código. Aprende a construir sistemas donde 
 
 | Stage | Nombre | Branch | Versión | Stack principal |
 |-------|--------|--------|---------|-----------------|
-| 1 | Foundations | `stage1-tdd-from-scratch` | Stage 1 | Python 3.13, Pyright, Ruff, Pytest |
+| 1 | Foundations | `stage1-inmemory` | Stage 1 | Python 3.13, Pyright, Ruff, Pytest |
 | 2 | Persistence | `stage2-persistence` | Stage 2 | SQLite, SQLAlchemy, Alembic |
 | 3 | Security Base | `stage3-security` | Stage 3 | OWASP, Pydantic, secrets |
 | 4 | Pro Databases | `stage4-databases` | Stage 4 | PostgreSQL, MongoDB |
@@ -44,7 +44,7 @@ No aprendas a usar IA para escribir código. Aprende a construir sistemas donde 
 
 ## Stage 1 · Foundations
 
-### `stage1-tdd-from-scratch` · Stage 1
+### `stage1-inmemory` · Stage 1
 
 **Objetivo:** Escribir código Python correcto, tipado, testeable y auditable por una IA.
 

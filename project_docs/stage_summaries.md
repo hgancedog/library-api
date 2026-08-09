@@ -29,7 +29,7 @@ Never update only one of the three files.
 
 | # | Name | Branch | Status | Stack highlights |
 | --- | ------ | -------- | -------- | ----------------- |
-| 1 | Foundations | `stage1-tdd-from-scratch` | **in_progress** | Python 3.14, Pyright strict, Ruff, Pytest |
+| 1 | Foundations | `stage1-inmemory` | **done** ✅ | Python 3.14, Pyright strict, Ruff, Pytest |
 | 2 | Persistence | `stage2-persistence` | pending | SQLite → PostgreSQL, SQLAlchemy, Alembic |
 | 3 | Security Base | `stage3-security` | pending | Pydantic v2, OWASP, Bandit, secrets |
 | 4 | Pro Databases | `stage4-databases` | pending | PostgreSQL, MongoDB, Redis (intro) |
@@ -44,9 +44,9 @@ Never update only one of the three files.
 
 ---
 
-## Stage 1 · Foundations — `stage1-tdd-from-scratch`
+## Stage 1 · Foundations — `stage1-inmemory`
 
-**Status**: in_progress  
+**Status**: done ✅  
 **Objective**: In-memory API — fully typed, tested, lint-clean. No database.
 
 **Stack**: Python 3.14 · Pyright (strict) · Ruff · Pytest · Git
