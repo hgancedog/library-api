@@ -148,7 +148,12 @@ No production code before a failing test. This is not negotiable in Stage 1.
 ## Commit flow
 
 Every commit goes through the review lens before committing.
-See `project_docs/commit-flow.md` for the step-by-step procedure.
+
+**Fast path (solo-dev):** `scripts/commit "message"` — ejecuta pre-flight checks,
+start, finalize, validate y commit en un solo paso.
+
+**Full path:** `project_docs/commit-flow.md` — procedimiento paso a paso para
+control fino, PRs multi-área, o docs-only commits.
 
 ## Known tech debt
 
