@@ -6,6 +6,7 @@ from app.models import (
     Book,
     BookID,
     BookNotFoundError,
+    BookNotLoanedError,
     Email,
     Loan,
     LoanNotFoundError,
@@ -183,3 +184,35 @@ def test_loan_get_active_loan_by_book_returns_loan(repo: LibraryRepository):
     loan_id = repo.add_loan(Loan(book_id, user_id, date.today()))
     loan = repo.get_loan(loan_id)
     assert repo.get_active_loan_by_book(book_id) is loan
+
+
+def test_return_book_raises_error_when_book_not_found(
+    repo: LibraryRepository,
+):
+    with pytest.raises(BookNotFoundError):
+        repo.return_book(999999)
+
+
+def test_return_book_raises_error_when_book_not_loaned(
+    repo: LibraryRepository,
+):
+    book_id = repo.add_book(Book(title="1984", author="George Orwell"))
+
+    with pytest.raises(BookNotLoanedError):
+        repo.return_book(book_id)
+
+
+def test_return_book_marks_book_and_loan_as_returned(
+    repo: LibraryRepository,
+):
+    book_id = repo.add_book(Book(title="1984", author="George Orwell"))
+    user_id = repo.add_user(User(username="hector", email=Email("hector@example.com")))
+    loan_id = repo.add_loan(Loan(book_id, user_id, date.today()))
+
+    repo.return_book(book_id)
+
+    book = repo.get_book(book_id)
+    assert book.is_available
+
+    loan = repo.get_loan(loan_id)
+    assert not loan.is_active()

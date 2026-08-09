@@ -4,6 +4,7 @@ from app.models import (
     Book,
     BookID,
     BookNotFoundError,
+    BookNotLoanedError,
     Loan,
     LoanID,
     LoanNotFoundError,
@@ -17,6 +18,7 @@ class LibraryRepository(Protocol):
     def add_book(self, book: Book) -> BookID: ...
     def get_book(self, book_id: BookID) -> Book: ...
     def get_all_books(self) -> dict[BookID, Book]: ...
+    def return_book(self, book_id: BookID) -> None: ...
     def add_user(self, user: User) -> UserID: ...
     def get_user(self, user_id: UserID) -> User: ...
     def add_loan(self, loan: Loan) -> LoanID: ...
@@ -47,6 +49,14 @@ class InMemoryRepository:
 
     def get_all_books(self) -> dict[BookID, Book]:
         return dict(self._db_books)
+
+    def return_book(self, book_id: BookID) -> None:
+        book = self.get_book(book_id)
+        loan = self.get_active_loan_by_book(book_id)
+        if loan is None:
+            raise BookNotLoanedError(f"Book with id {book_id} is not currently loaned")
+        book.is_available = True
+        loan.mark_as_returned()
 
     def add_user(self, user: User) -> UserID:
         user.user_id = self._next_user_id
