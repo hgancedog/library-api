@@ -91,12 +91,16 @@ config derails entire phases. Verify it at three checkpoints:
 If the session touched production code or tests, run before ending:
 
 ```bash
-git rev-parse --short HEAD          # vs project.git_head
+git rev-parse --short HEAD          # should be == or descendant of project.git_head
 pytest src/tests/ -q --tb=no        # vs test_status.total_tests
 python --version                    # vs project.python_runtime
 git branch --show-current           # vs project.current_branch
 ls src/app/*.py                     # vs structure.source_files
 ```
+
+`project.git_head` records the LAST commit where config.yaml was fully verified.
+It does NOT need to match current HEAD — only that current HEAD is a descendant.
+Update `git_head` only when running the full integrity check, not on every commit.
 
 Also update `test_status.coverage_percent`, `test_status.last_verified`,
 `domain.entities[*].behavior` and `domain.exceptions.hierarchy` if they changed.
@@ -129,7 +133,7 @@ Read-only sessions, doc reviews, or conversations do **not** need this check.
 
 5. **Session without a passing test**: if a full session ends without at least one new passing test that advances Stage 1 completion criteria, flag it.
 
-6. **Stale SDD artifact**: `openspec/config.yaml` must reflect the current state of the project — not aspirational architecture. If it lists source files that don't exist on disk, describes a stack that isn't installed, or references a different branch than `git branch --show-current`, flag it. A stale config wastes entire SDD phases because agents treat it as ground truth. Verify with: `ls src/app/*.py` vs `structure.source_files`, `python --version` vs `project.python_runtime`, `git branch --show-current` vs `project.current_branch`.
+6. **Stale SDD artifact**: `openspec/config.yaml` must reflect the current state of the project — not aspirational architecture. If it lists source files that don't exist on disk, describes a stack that isn't installed, or references a different branch than `git branch --show-current`, flag it. A stale config wastes entire SDD phases because agents treat it as ground truth. Verify with: `ls src/app/*.py` vs `structure.source_files`, `python --version` vs `project.python_runtime`, `git branch --show-current` vs `project.current_branch`. Note: `project.git_head` is a historical record of last verification, not current HEAD — it's stale by design and only updated during full integrity checks.
 
 7. **Long session without delegation**: when the session reaches ~20 tool calls or ~2 non-trivial commits without delegating a single task to a subagent, pause and warn. Long sessions cause context dilution — rules in this file, the commit flow, and `config.yaml` integrity checks are progressively forgotten. Suggest: (a) close and reopen the session to reload context fresh, or (b) delegate the next task.
 
