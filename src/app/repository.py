@@ -4,7 +4,6 @@ from app.models import (
     Book,
     BookID,
     BookNotFoundError,
-    BookNotLoanedError,
     Loan,
     LoanID,
     LoanNotFoundError,
@@ -15,9 +14,10 @@ from app.models import (
 
 
 class LibraryRepository(Protocol):
-    """Structural interface for library persistence.
+    """Structural interface for library persistence — CRUD only.
 
     Any implementation (in-memory, SQL, etc.) must satisfy this protocol.
+    Orchestration (loan_book, return_book) lives in LibraryService.
     Swappable without modifying tests or domain code.
     """
 
@@ -33,14 +33,6 @@ class LibraryRepository(Protocol):
         """Return a copy of all stored books."""
         ...
 
-    def return_book(self, book_id: BookID) -> None:
-        """Return a loaned book. Raises BookNotLoanedError."""
-        ...
-
-    def loan_book(self, book_id: BookID, user_id: UserID) -> LoanID:
-        """Loan a book to a user and return the new loan ID."""
-        ...
-
     def add_user(self, user: User) -> UserID:
         """Add a user and return their new ID."""
         ...
@@ -52,7 +44,8 @@ class LibraryRepository(Protocol):
     def add_loan(self, loan: Loan) -> LoanID:
         """Store a loan and return its new ID.
 
-        Prefer loan_book() for the full loan workflow with validation.
+        Use LibraryService.loan_book() for the full loan workflow
+        with validation.
         """
         ...
 
@@ -70,10 +63,11 @@ class LibraryRepository(Protocol):
 
 
 class InMemoryRepository:
-    """Dictionary-backed implementation of LibraryRepository.
+    """Dictionary-backed implementation of LibraryRepository — CRUD only.
 
     Stores books, users, and loans in plain dicts with auto-incrementing
-    integer IDs. Suitable for Stage 1 — no persistence, no database.
+    integer IDs. Serves as a lightweight test double in Stage 2 until
+    SQLiteRepository arrives.
     """
 
     def __init__(self):
@@ -105,34 +99,6 @@ class InMemoryRepository:
         """Return a shallow copy of the full book catalog."""
         return dict(self._db_books)
 
-    def return_book(self, book_id: BookID) -> None:
-        """Return a loaned book, marking both book and loan as returned.
-
-        Raises BookNotFoundError if the book ID does not exist.
-        Raises BookNotLoanedError if the book has no active loan.
-        """
-        book = self.get_book(book_id)
-        loan = self.get_active_loan_by_book(book_id)
-        if loan is None:
-            raise BookNotLoanedError(f"Book with id {book_id} is not currently loaned")
-        book.mark_as_returned()
-        loan.mark_as_returned()
-
-    def loan_book(self, book_id: BookID, user_id: UserID) -> LoanID:
-        """Loan a book to a user and return the new loan ID.
-
-        Validates that both book and user exist, then marks the book as
-        loaned and creates the loan in one step.
-
-        Raises BookNotFoundError if the book ID does not exist.
-        Raises UserNotFoundError if the user ID does not exist.
-        Raises BookAlreadyLoanedError if the book is already loaned.
-        """
-        book = self.get_book(book_id)
-        self.get_user(user_id)
-        book.mark_as_loaned()
-        return self.add_loan(Loan(book_id, user_id))
-
     def add_user(self, user: User) -> UserID:
         """Assign an auto-incremented ID and store the user."""
         user.user_id = self._next_user_id
@@ -152,7 +118,8 @@ class InMemoryRepository:
     def add_loan(self, loan: Loan) -> LoanID:
         """Assign an auto-incremented ID and store the loan.
 
-        Prefer loan_book() for the full loan workflow with validation.
+        Use LibraryService.loan_book() for the full loan workflow
+        with validation.
         """
         loan.loan_id = self._next_loan_id
         self._db_loans[loan.loan_id] = loan
@@ -184,6 +151,3 @@ class InMemoryRepository:
             if loan.book_id == book_id and loan.is_active():
                 return loan
         return None
-
-
-_: LibraryRepository = InMemoryRepository()
