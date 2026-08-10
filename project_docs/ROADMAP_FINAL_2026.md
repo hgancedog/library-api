@@ -139,29 +139,41 @@ Puedes cambiar la implementación de `LibraryRepository` completamente y tus tes
 
 ### Conceptos clave a dominar
 
-**El repositorio como frontera**  
-La única pieza que cambia al pasar de memoria a SQLite es el repositorio. Si tu `LibraryService` necesita cambios, Stage 1 fue incorrecto.
+**Separación servicio ↔ repositorio (decisión de Stage 2)**  
+Stage 1 mezclaba orquestación y persistencia en el repositorio (`loan_book()`, `return_book()`). Stage 2 corrige esto: el protocolo `LibraryRepository` se reduce a CRUD puro y la orquestación se mueve a un nuevo `LibraryService`. El servicio es el punto único donde se coordinan entidades; el repositorio solo persiste y recupera datos.
 
 ```python
-# Stage 1: repositorio en memoria
-class InMemoryRepository(LibraryRepository):
-    def get_book(self, book_id: int) -> Book: ...
+# repository.py — solo CRUD (adelgazado en Stage 2)
+class LibraryRepository(Protocol):
+    def get_book(self, book_id: BookID) -> Book: ...
+    def add_book(self, book: Book) -> BookID: ...
+    def add_loan(self, loan: Loan) -> LoanID: ...
+    # ... resto de métodos CRUD
+
+# library_service.py — orquestación (NUEVO en Stage 2)
+class LibraryService:
+    def __init__(self, repository: LibraryRepository) -> None:
+        self._repo = repository
+
+    def loan_book(self, book_id, user_id) -> LoanID:
+        book = self._repo.get_book(book_id)
+        self._repo.get_user(user_id)
+        book.mark_as_loaned()
+        return self._repo.add_loan(Loan(book_id, user_id))
 
 # Stage 2: mismo contrato, diferente implementación
-class SQLiteRepository(LibraryRepository):
+class SQLiteRepository:
     def get_book(self, book_id: int) -> Book: ...
-
-# LibraryService no cambia ni una línea
 ```
 
 **Migraciones como contrato**  
 Alembic registra la historia de tu esquema. Una migración mal hecha en producción puede destruir datos. Tratá cada migración como código de producción: revisada, testeada, irreversible con cuidado.
 
 **Tests de integración vs tests unitarios**  
-En Stage 1 todos tus tests eran unitarios (en memoria, sin I/O). En Stage 2 añades tests de integración que hablan con SQLite real. Mantenlos separados.
+En Stage 1 todos tus tests eran unitarios (en memoria, sin I/O). En Stage 2 añades tests de integración que hablan con SQLite real. Mantenlos separados: el servicio se prueba con un doble ligero del repositorio (unitario, sin I/O); el repositorio se prueba con SQLite `:memory:` (integración, I/O real).
 
 ```python
-# conftest.py
+# conftest.py — fixture de integración
 @pytest.fixture
 def db_session():
     engine = create_engine("sqlite:///:memory:")
@@ -173,10 +185,12 @@ def db_session():
 
 ### Criterios de compleción
 
-- [ ] Misma API de Stage 1, ahora persistida en SQLite
+- [ ] `LibraryService` creado con `loan_book()` y `return_book()`; protocolo reducido a CRUD
+- [ ] `SQLiteRepository` implementa el protocolo CRUD con SQLAlchemy
 - [ ] Migraciones con Alembic para todos los modelos
-- [ ] Tests unitarios (lógica de negocio) separados de tests de integración (repositorio)
-- [ ] Los tests de Stage 1 siguen pasando sin modificaciones
+- [ ] Tests del servicio (unitarios, con doble de repositorio) separados de tests del repositorio (integración, SQLite `:memory:`)
+- [ ] Los tests de modelos de dominio de Stage 1 siguen pasando sin modificaciones
+- [ ] Cambiar SQLite → PostgreSQL = una línea de configuración
 
 ### Cómo usar IA en esta stage
 
@@ -186,7 +200,7 @@ def db_session():
 
 ### Señal de que estás listo para Stage 3
 
-Cambias de SQLite a PostgreSQL cambiando una línea de configuración y tus tests siguen pasando.
+Cambias de SQLite a PostgreSQL cambiando una línea de configuración y tus tests siguen pasando. `LibraryService` no sabe qué base de datos hay debajo.
 
 ---
 

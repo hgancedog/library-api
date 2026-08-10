@@ -11,7 +11,7 @@ echo "🔍 Pre-flight..."
 pytest src/tests/ -q --tb=no
 ruff check src/
 ruff format src/ --check
-pyright 2>&1 | grep -q "0 errors" || { echo "❌ pyright failed"; exit 1; }
+pyright 2>&1 | grep "0 errors" > /dev/null || { echo "❌ pyright failed"; exit 1; }
 
 echo "✅ Pre-flight OK"
 
@@ -21,9 +21,9 @@ $CADD -A
 
 # ── Start review ────────────────────────────────────────────────────
 REVIEW=$(gentle-ai review start 2>&1)
-LINEAGE=$(echo "$REVIEW" | jq -r '.lineage_id')
-LENSES=$(echo "$REVIEW" | jq -r '.selected_lenses | join(" ")')
-RISK=$(echo "$REVIEW" | jq -r '.risk_level')
+LINEAGE=$(echo "$REVIEW" | python3 -c "import sys,json; print(json.load(sys.stdin)['lineage_id'])")
+LENSES=$(echo "$REVIEW" | python3 -c "import sys,json; print(' '.join(json.load(sys.stdin)['selected_lenses']))")
+RISK=$(echo "$REVIEW" | python3 -c "import sys,json; print(json.load(sys.stdin)['risk_level'])")
 echo "📋 $LINEAGE · lenses: $LENSES · risk: $RISK"
 
 # ── Evidence (from real command output) ─────────────────────────────

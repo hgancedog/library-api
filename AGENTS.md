@@ -7,8 +7,8 @@
 - **Name**: library-api — Library Management System
 - **Author**: Hector Gancedo Grade
 - **Language**: Python 3.14
-- **Current stage**: Stage 1 · Foundations (`stage1-inmemory`)
-- **Goal**: In-memory API, fully typed, tested, and lint-clean — no database yet
+- **Current stage**: Stage 2 · Persistence (`stage2-persistence`)
+- **Goal**: Add SQLite persistence via SQLAlchemy + Alembic, separate service from repository
 - **Full roadmap**: `project_docs/ROADMAP_FINAL_2026.md`
 - **SDD config**: `openspec/config.yaml`
 
@@ -35,18 +35,30 @@ ruff check src/ && ruff format src/ && pyright
 ```text
 src/
   app/
-    models.py           # dataclass domain models + type aliases (TDD-driven)
+    models.py             # dataclass domain models + type aliases (TDD-driven)
+    repository.py         # LibraryRepository protocol (CRUD only in Stage 2)
+    library_service.py    # NUEVO Stage 2 — orquestación, sin dependencia de DB
+    orm_models.py         # NUEVO Stage 2 — SQLAlchemy declarative models
+    sqlite_repository.py  # NUEVO Stage 2 — implementación CRUD con SQLAlchemy
   tests/
-    test_email.py       # Email VO tests
+    test_book.py          # Book model tests (intactos desde Stage 1)
+    test_user.py          # User model tests (intactos)
+    test_loan.py          # Loan model tests (intactos)
+    test_email.py         # Email VO tests (intactos)
+    test_library_service.py    # NUEVO — unit tests con repo doble
+    test_sqlite_repository.py  # NUEVO — integration tests con SQLite :memory:
 openspec/
-  config.yaml         # SDD project config — source of truth for Pi phases
+  config.yaml           # SDD project config — source of truth for Pi phases
 project_docs/
   design-notes/
-    01-tdd-desde-cero.md  # decision journal + TDD guide
+    01-tdd-desde-cero.md    # decision journal Stage 1
+    02-persistencia.md       # decision journal Stage 2
   ROADMAP_FINAL_2026.md
 pyproject.toml
-pyrightconfig.json    # typeCheckingMode: strict, includes: [src]
-.pre-commit-config.yaml  # ruff + ruff-format + venv-check
+pyrightconfig.json      # typeCheckingMode: strict, includes: [src]
+.pre-commit-config.yaml # ruff + ruff-format + venv-check
+alembic.ini             # NUEVO Stage 2
+alembic/                # NUEVO Stage 2 — migrations
 ```
 
 ## Established conventions

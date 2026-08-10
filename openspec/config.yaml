@@ -1,6 +1,6 @@
 # openspec/config.yaml
 # SDD / OpenSpec project configuration for library-api
-# Updated: 2026-08-10 · Stage 1 · Foundations
+# Updated: 2026-07-20 · Stage 2 · Persistence
 #
 # RULES FOR THIS FILE:
 #   1. Describe ONLY what exists on disk right now — no aspirational content.
@@ -26,10 +26,10 @@ project:
   root: /home/heks/PROJECTS/library-api
   language: Python
   python_runtime: "3.14.4" # verified: python --version in .venv
-  current_stage: 1
-  current_stage_name: Foundations
-  current_branch: stage1-inmemory # verified: git branch --show-current
-  git_head: cd5be33 # last verified commit at which config.yaml was checked
+  current_stage: 2
+  current_stage_name: Persistence
+  current_branch: stage2-persistence # verified: git branch --show-current
+  git_head: cd5be33 # last verified commit at which config.yaml was checked (Stage 1 tip)
 
   roadmap_file: project_docs/ROADMAP_FINAL_2026.md
   stage_summaries: project_docs/stage_summaries.md
@@ -298,11 +298,15 @@ sdd:
     verify:
       description: Run test suite, lint, typecheck; report results
 
-  stage_1_done_when:
-    - Repository implementation swappable without touching tests
-    - "Pyright strict mode: zero errors"
-    - "Ruff: zero lint warnings"
-    - "Coverage: >=90% on business logic"
+  stage_2_done_when:
+    - LibraryService created with loan_book() and return_book(); protocol reduced to CRUD
+    - SQLiteRepository implements CRUD protocol with SQLAlchemy
+    - Alembic migrations for all models
+    - Service tests (unit, with repo double) separate from repository tests (integration, SQLite :memory:)
+    - Stage 1 domain model tests pass without modification
+    - Change SQLite → PostgreSQL by changing one line; all tests pass
+    - Pyright strict mode: zero errors
+    - Ruff: zero lint warnings
 
 # ──────────────────────────────────────────────────────────────
 # ROADMAP POINTER — canonical source, do not duplicate stage data
@@ -311,5 +315,5 @@ roadmap:
   canonical_source: project_docs/ROADMAP_FINAL_2026.md
   note: >
     Do not duplicate stage branch names, stacks, or versions here.
-    config.yaml describes the PRESENT (Stage 1). The roadmap file
+    config.yaml describes the PRESENT (Stage 2, in progress). The roadmap file
     is the single source of truth for all stages past, present, and future.

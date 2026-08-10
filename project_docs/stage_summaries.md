@@ -71,22 +71,27 @@ Never update only one of the three files.
 
 ## Stage 2 · Persistence — `stage2-persistence`
 
-**Status**: pending  
+**Status**: in_progress  
 **Objective**: Add persistence without leaking the database into business logic.
 
 **Stack**: SQLite (dev) · SQLAlchemy · Alembic · Pytest fixtures (integration tests)
 
 **Core concepts**:
 
-- Only the repository implementation changes — `LibraryService` must be untouched
+- `LibraryService` (NEW) extracts orchestration from the repository; protocol reduced to pure CRUD
+- Repository → service → domain models: three layers with one-way dependencies
+- Only `SQLiteRepository` is new persistence code; service and domain models are DB-agnostic
 - SQLite for dev/tests; switching to PostgreSQL = one config line
 - Alembic migrations are production code: reviewed, tested, irreversible with care
-- Unit tests (in-memory, no I/O) stay separate from integration tests (SQLite)
+- Service tested with a lightweight repository double (unit, no I/O); repository tested with SQLite `:memory:` (integration)
+- Stage 1 domain model tests (`test_book.py`, `test_user.py`, `test_loan.py`, `test_email.py`) require zero modification
 
 **Exit criteria**:
 
+- `LibraryService` with `loan_book()` and `return_book()`; protocol reduced to 10 CRUD methods
+- `SQLiteRepository` implements the CRUD protocol with SQLAlchemy
 - Switch SQLite → PostgreSQL by changing one line; all tests pass
-- Stage 1 unit tests require zero modification
+- Stage 1 domain model tests require zero modification
 - Integration tests use `Session(engine)` fixtures with rollback
 
 ---
