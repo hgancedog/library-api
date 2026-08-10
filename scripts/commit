@@ -5,6 +5,15 @@ set -euo pipefail
 
 MSG="${1:?Usage: scripts/commit 'commit message'}"
 
+# ── Install/update pre-commit hook (tracked in scripts/pre-commit) ──
+HOOK=".git/hooks/pre-commit"
+SOURCE="scripts/pre-commit"
+if [ ! -x "$HOOK" ] || [ "$SOURCE" -nt "$HOOK" ]; then
+    cp "$SOURCE" "$HOOK"
+    chmod +x "$HOOK"
+    echo "🔒 Pre-commit hook installed/updated"
+fi
+
 # ── Pre-flight checks ──────────────────────────────────────────────
 echo "🔍 Pre-flight..."
 
@@ -62,7 +71,13 @@ gentle-ai review finalize $RESULT_FLAGS --evidence "$EVIDENCE" > /dev/null
 
 # ── Validate ────────────────────────────────────────────────────────
 gentle-ai review validate --gate pre-commit --lineage "$LINEAGE" > /dev/null
-
+    
+# ── Marker (pre-commit hook gate) ───────────────────────────────────
+MARKER_DIR="/tmp/library-api-review-markers"
+mkdir -p "$MARKER_DIR"
+MARKER="$MARKER_DIR/marker-$$-$(date +%s)"
+touch "$MARKER"
+    
 # ── Commit ──────────────────────────────────────────────────────────
 CCMT=$(echo "Z2l0IGNvbW1pdCAtbQ==" | base64 -d)
 $CCMT "$MSG"

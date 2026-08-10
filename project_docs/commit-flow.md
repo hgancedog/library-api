@@ -1,6 +1,18 @@
 # Commit flow — library-api
 
 > Referenced by `AGENTS.md`. Loaded on demand for commits.
+> Engram memory: `architecture/commit-review-flow` (#167) — decision record.
+
+## ⚠️ What to use (source of truth: Engram #167 `architecture/commit-review-flow`)
+
+| Context | Tool |
+|---|---|
+| Commits (fast path) | `scripts/commit "msg"` |
+| Commits (full path) | `gentle-ai review start/finalize/validate` |
+| Any other review context | `gentle-ai review` (native binary) |
+
+**Never use the Pi `gentle_review` tool.** The native binary is the only reliable
+path. Full rationale and fallback rules in Engram #167.
 
 ## Fast path (solo-dev)
 

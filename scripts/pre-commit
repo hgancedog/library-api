@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Source copy of the pre-commit hook — tracked in the repo.
+# The actual hook lives at .git/hooks/pre-commit (Git system dir, untracked).
+# scripts/commit auto-installs this file there on every run if missing/outdated.
+set -euo pipefail
+
+TIMEOUT=120
+MARKER_DIR="/tmp/library-api-review-markers"
+MARKER=$(ls -t "$MARKER_DIR"/marker-* 2>/dev/null | head -1)
+
+if [ -z "$MARKER" ]; then
+    echo ""
+    echo "❌ Commit blocked — no review marker found."
+    echo "   Use: scripts/commit \"your message\""
+    echo ""
+    exit 1
+fi
+
+MARKER_AGE=$(($(date +%s) - $(stat -c %Y "$MARKER")))
+if [ "$MARKER_AGE" -gt "$TIMEOUT" ]; then
+    echo ""
+    echo "❌ Commit blocked — review marker expired (${MARKER_AGE}s > ${TIMEOUT}s)."
+    echo "   Re-run: scripts/commit \"your message\""
+    echo ""
+    exit 1
+fi
+
+find "$MARKER_DIR" -name "marker-*" -mmin +2 -delete 2>/dev/null || true
+
+exit 0
