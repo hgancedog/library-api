@@ -93,13 +93,14 @@ structure:
   source_files:
     - src/app/__init__.py # empty (0 lines)
     - src/app/models.py # domain models, exceptions, Email VO, type aliases, docstrings (155 lines)
-    - src/app/repository.py # LibraryRepository protocol + InMemoryRepository, docstrings (189 lines)
+    - src/app/repository.py # LibraryRepository protocol + InMemoryRepository, docstrings (153 lines)
+    - src/app/library_service.py # LibraryService orchestration: loan_book + return_book, protocol-only (58 lines)
 
   test_files:
-    - src/tests/test_book.py # Book creation + availability logic (5 tests)
+    - src/tests/test_book.py # Book creation + availability logic (8 tests)
     - src/tests/test_email.py # Email validation + normalization (2 tests)
-    - src/tests/test_loan.py # Loan creation + due_date + validation (3 tests)
-    - src/tests/test_repository.py # InMemoryRepository Book/User/Loan CRUD + active loans + return_book + loan_book (26 tests)
+    - src/tests/test_loan.py # Loan creation + due_date + validation (5 tests)
+    - src/tests/test_library_service.py # LibraryService orchestration, fixtures repo+service (7 tests)
     - src/tests/test_user.py # User creation + validation (2 tests)
 
   config_files:
@@ -112,6 +113,8 @@ structure:
     - project_docs/ROADMAP_FINAL_2026.md
     - project_docs/stage_summaries.md
     - project_docs/design-notes/01-tdd-desde-cero.md
+    - project_docs/design-notes/02-persistencia.md
+    - project_docs/commit-flow.md
 
   skill_registry:
     - .atl/skill-registry.md # project root (active, updated 2026-07-05)
@@ -207,16 +210,17 @@ conventions:
 # CURRENT TEST STATUS
 # ──────────────────────────────────────────────────────────────
 test_status:
-  total_tests: 40
-  passing: 40
+  total_tests: 24
+  passing: 24
   failing: 0
-  coverage_percent: 100
+  coverage_percent: 95
   covered_modules:
     - src/app/models.py
+    - src/app/library_service.py
     - src/app/repository.py
   pyright_errors: 0
   ruff_warnings: 0
-  last_verified: "2026-08-10"
+  last_verified: "2026-09-06"
 
 # ──────────────────────────────────────────────────────────────
 # KNOWN TECH DEBT — STAGE 1

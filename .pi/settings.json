@@ -1,7 +1,0 @@
-{
-	"_comment": {
-		"profile": "Simple (Stage 1-4)",
-		"applies_to": "Python dataclasses, in-memory DB, single process — foundational backend patterns",
-		"deepseek_note": "DeepSeek collapses thinking levels: off→disabled, minimal/low/medium/high→'high' effort, xhigh→'max' effort. Semantic levels preserved for future model migration."
-	}
-}

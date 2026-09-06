@@ -184,6 +184,15 @@ def test_loan_book_creates_loan(service, repo):
     assert repo.get_loan(loan_id).is_active()
 ```
 
+**Aclaración sobre «no toca el repo»:** «solo necesita el service» se refiere
+al **parámetro** del test, no a la definición de las fixtures. Ambos fixtures
+(`repo` y `service`) están declarados en el archivo — los dos son necesarios en
+la declaración. Lo que cambia por test es qué fixture solicita en su firma:
+este test solo solicita `service` como parámetro, y no solicita `repo`. El repo
+existe y el servicio lo consulta igualmente, puesto que el fixture `service`
+declara a `repo` como dependencia y pytest lo instancia antes de construir
+`service` — pero el test no lo maneja directamente.
+
 **Qué cambió respecto a Stage 1 y qué no:**
 
 Los tests de modelos de dominio (`test_book.py`, `test_user.py`,
@@ -538,6 +547,66 @@ Los únicos archivos modificados en Stage 2 (hasta ahora):
 | `src/tests/test_user.py` | Sin cambios |
 | `src/tests/test_loan.py` | Sin cambios |
 | `src/tests/test_email.py` | Sin cambios |
+
+---
+
+## Sesión 2 — Preparación para SQLAlchemy + SQLite
+
+> Fecha: agosto 2026
+
+Antes de escribir `SQLiteRepository` aclaramos por qué SQLite no necesita
+instalación ni configuración, y decidimos el orden de los artefactos.
+
+### Decisión 2.1 — SQLite no se instala: ya está en Python
+
+**Qué:** Stage 2 introduce SQLite como motor de persistencia, pero no hay que
+instalar nada específico de SQLite. La única dependencia nueva es SQLAlchemy
+(el ORM que habla con SQLite) y Alembic (migraciones).
+
+**Por qué SQLite está ya presente:**
+
+| Componente | ¿Se instala? | Motivo |
+|---|---|---|
+| Servidor SQLite | No | No existe — SQLite es una biblioteca C embebida en el proceso |
+| Driver Python (`sqlite3`) | No | Viene en la stdlib de Python desde 2.5 |
+| Base de datos | No | Se crea como archivo (o en `:memory:`) al conectarse |
+| Usuarios / puertos / passwords | No | SQLite no tiene sistema de autenticación |
+
+A diferencia de PostgreSQL o MySQL, donde necesitas instalar un servidor,
+crear una base de datos, configurar usuarios y abrir puertos, SQLite es un
+archivo. La conexión `sqlite:///:memory:` crea la base de datos en RAM y la
+destruye al terminar el test. Cero configuración.
+
+SQLAlchemy sí necesita instalarse (`pip install sqlalchemy`) porque es el
+puente entre Python y el driver `sqlite3` de la stdlib. Pero SQLite en sí
+no requiere ninguna acción.
+
+### Decisión 2.2 — Orden de los artefactos Stage 2 (parte nueva)
+
+**Qué:** el orden para lo que queda de Stage 2:
+
+```
+1. Instalar SQLAlchemy + Alembic (pyproject.toml + pip install)
+2. orm_models.py — mapeos declarativos (prerrequisito técnico, sin tests propios)
+3. test_sqlite_repository.py — tests de integración (RED)
+4. sqlite_repository.py — implementación del protocolo (GREEN)
+5. Alembic — alembic.ini + migración inicial
+6. Validación final — pytest + ruff + pyright
+```
+
+**Por qué `orm_models.py` va antes que los tests:** los modelos ORM son mapeos
+declarativos de tablas — no contienen lógica de negocio. Son un prerrequisito
+técnico para que `SQLiteRepository` pueda existir. No se escriben tests
+independientes para ellos porque:
+
+- No tienen comportamiento propio que probar
+- Se prueban indirectamente en `test_sqlite_repository.py` (si el mapeo falla,
+  los tests de integración lo detectan)
+- Un test que compruebe que `BookTable` tiene una columna `title` sería un test
+  del framework, no de nuestra lógica
+
+A partir del paso 3, TDD estricto: tests de repositorio primero en rojo,
+implementación después en verde.
 
 ---
 
