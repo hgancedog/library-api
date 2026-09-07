@@ -1,6 +1,6 @@
 # openspec/config.yaml
 # SDD / OpenSpec project configuration for library-api
-# Updated: 2026-07-20 · Stage 2 · Persistence
+# Updated: 2026-09-07 · Stage 2 · Persistence
 #
 # RULES FOR THIS FILE:
 #   1. Describe ONLY what exists on disk right now — no aspirational content.
@@ -54,7 +54,7 @@ stack:
     role: Linter + formatter
     config: pyproject.toml [tool.ruff]
     line_length: 88
-    target_version: py313
+    target_version: py314
     lint_rules: ["E", "F", "W", "I", "N"]
     ignored_rules: ["E501"]
     quote_style: double
@@ -65,7 +65,19 @@ stack:
     role: Test runner
     plugins: [pytest-cov>=6.0]
     config: pyproject.toml
-    status: active # 40 tests, 0 failures
+    status: active # 24 tests, 0 failures, 95% coverage
+
+  - tool: SQLAlchemy
+    version: "2.0.52"
+    role: ORM — bridge between Python and SQLite
+    config: pyproject.toml [project.dependencies]
+    status: installed # verified: import sqlalchemy; pip check clean
+
+  - tool: Alembic
+    version: "1.19.2"
+    role: Schema migrations
+    config: pyproject.toml [project.dependencies]
+    status: installed # verified: import alembic; pip check clean
 
   - tool: pre-commit
     version: "4.5.1"

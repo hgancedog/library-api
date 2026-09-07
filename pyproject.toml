@@ -12,8 +12,11 @@ version = "1.0.0"
 description = "Library Management System API - An evolutionary backend development journey"
 readme = "README.md"
 authors = [{ name = "Hector Gancedo Grade" }]
-requires-python = ">=3.10"
-dependencies = []
+    requires-python = ">=3.14"
+    dependencies = [
+      "SQLAlchemy>=2.0",
+      "alembic>=1.19",
+    ]
 
 [project.optional-dependencies]
 dev = [
@@ -26,7 +29,7 @@ dev = [
 
 [tool.ruff]
 line-length = 88
-target-version = "py313"
+target-version = "py314"
 src = ["src"]
 exclude = [
   ".git",
@@ -49,4 +52,4 @@ ignore = ["E501"]
 quote-style = "double"
 
 [tool.pylance]
-pythonVersion = "3.13"
+pythonVersion = "3.14"
